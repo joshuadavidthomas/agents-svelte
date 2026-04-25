@@ -1,0 +1,110 @@
+{
+  "name": "@joshthomas/cloudflare-agents-svelte",
+  "description": "Community Svelte 5 bindings for the Cloudflare Agents SDK",
+  "keywords": [
+    "cloudflare",
+    "cloudflare-agents",
+    "agents",
+    "svelte",
+    "sveltekit"
+  ],
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "types": "./src/index.ts",
+  "svelte": "./src/index.ts",
+  "private": false,
+  "author": "Josh Thomas",
+  "homepage": "https://github.com/joshthomas/cloudflare-agents-svelte#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshthomas/cloudflare-agents-svelte.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joshthomas/cloudflare-agents-svelte/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@ai-sdk/svelte": "^4.0.0",
+    "@cloudflare/ai-chat": ">=0.3.2 <1.0.0",
+    "@cloudflare/voice": ">=0.1.0 <1.0.0",
+    "agents": ">=0.9.0 <1.0.0",
+    "ai": "^6.0.0",
+    "partysocket": "^1.0.0",
+    "svelte": "^5.0.0"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.9"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/ai-chat": {
+      "optional": true
+    },
+    "@cloudflare/voice": {
+      "optional": true
+    },
+    "@ai-sdk/svelte": {
+      "optional": true
+    },
+    "ai": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint .",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run format:check && npm run lint && npm run typecheck",
+    "test": "vitest --run --config src/tests/vitest.config.ts",
+    "test:svelte": "vitest --run --config src/tests/vitest.config.ts",
+    "pack:dry-run": "npm pack --dry-run"
+  },
+  "devDependencies": {
+    "@ai-sdk/svelte": "^4.0.0",
+    "@cloudflare/ai-chat": "*",
+    "@cloudflare/voice": "*",
+    "@cloudflare/workers-types": "^4.20260418.1",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/node": "^25.6.0",
+    "@vitest/browser-playwright": "^4.1.4",
+    "agents": "*",
+    "ai": "^6.0.168",
+    "oxfmt": "^0.45.0",
+    "oxlint": "^1.60.0",
+    "partysocket": "1.1.16",
+    "playwright": "^1.59.1",
+    "svelte": "^5.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.8",
+    "vitest": "4.1.4",
+    "vitest-browser-svelte": "^2.1.1",
+    "wrangler": "^4.83.0"
+  },
+  "exports": {
+    ".": {
+      "svelte": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./chat": {
+      "svelte": "./src/chat.ts",
+      "types": "./src/chat.ts",
+      "default": "./src/chat.ts"
+    },
+    "./voice": {
+      "svelte": "./src/voice.ts",
+      "types": "./src/voice.ts",
+      "default": "./src/voice.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/*.ts",
+    "src/*.svelte.ts",
+    "README.md",
+    "LICENSE"
+  ]
+}
