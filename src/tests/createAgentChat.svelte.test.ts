@@ -4,6 +4,14 @@ import type { UIMessage } from "ai";
 import { MessageType } from "@cloudflare/ai-chat/types";
 import { AgentChat, type CreateAgentChatOptions } from "../chat.svelte.ts";
 import { createMockAgent, type MockAgent } from "./mock-agent.ts";
+import {
+  dispatchStaleWeatherApprovalSync,
+  dispatchWeatherApprovalContinuationFinish,
+  dispatchWeatherApprovalContinuationStart,
+  expectedWeatherApprovalFinalParts,
+  weatherApprovalFlow,
+  weatherApprovalInitialMessages
+} from "./human-loop-flow.ts";
 
 const cleanups: Array<() => void> = [];
 
@@ -1551,6 +1559,41 @@ describe("createAgentChat — stream chunk repair", () => {
           state: "done"
         }
       ]);
+    });
+  });
+
+  it("preserves approved tool continuation parts when a server sync arrives mid-stream", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, {
+      resume: true,
+      initialMessages: weatherApprovalInitialMessages()
+    });
+    await waitForChatInitialized(chat);
+
+    chat.addToolApprovalResponse({
+      id: weatherApprovalFlow.approvalId,
+      approved: true
+    });
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_TOOL_APPROVAL)).toMatchObject({
+        toolCallId: weatherApprovalFlow.toolCallId,
+        approved: true,
+        autoContinue: true
+      });
+      expect(
+        findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)
+      ).toBeDefined();
+    });
+
+    dispatchWeatherApprovalContinuationStart(mock);
+    dispatchStaleWeatherApprovalSync(mock);
+    dispatchWeatherApprovalContinuationFinish(mock);
+
+    await vi.waitFor(() => {
+      const assistant = chat.messages.find(
+        (message) => message.id === weatherApprovalFlow.assistantId
+      );
+      expect(assistant?.parts).toEqual(expectedWeatherApprovalFinalParts());
     });
   });
 

@@ -64,6 +64,38 @@ API changes to consider:
 - Keep `sub` in `CreateAgentOptions` if browser testing confirms it behaves correctly.
 - Document two Svelte-native lifetime patterns clearly: factory calls at component init, or direct classes with explicit cleanup for dynamic identities.
 
+## human-in-the-loop
+
+Status: implemented; browser dogfooding found approval-continuation edge cases now covered by tests.
+
+Official example mirrored:
+
+- Closest match: `cloudflare/agents/guides/human-in-the-loop`
+- Official model: `@cf/moonshotai/kimi-k2.6`
+- Current dogfooding model: `@cf/moonshotai/kimi-k2.6`
+
+Felt good:
+
+- `needsApproval` tool parts map naturally to Svelte UI: derive pending approvals from `chat.messages`, render Approve/Reject actions, then call `chat.addToolApprovalResponse(...)`.
+- Browser-side tools work through `chat.pendingToolCalls` and `toolCall.run(...)` without adding another public API.
+- The official example's three tool categories are expressible with the same Svelte chat controller: approval-required weather, browser-handled time, automatic server news.
+
+Felt awkward / bugs found:
+
+- A custom system prompt leaked implementation details into the model context and caused the model to explain browser time instead of calling the local-time tool. Removed it to match upstream, which relies on tool descriptions.
+- `chat.isStreaming` alone misses the submitted-before-first-chunk state. Examples now show `Thinking` from `chat.status === "submitted"`.
+- Approval continuation streams can resume with missing `reasoning-start` or `text-start` chunks. The direct transport now synthesizes missing starts.
+- After approval, server sync messages could overwrite locally repaired continuation parts, making final reasoning/text briefly appear and then disappear. The chat controller now protects the current assistant tail during tool continuation and releases it when the continuation finishes.
+
+Tests added:
+
+- Protocol regression in `src/tests/createAgentChat.svelte.test.ts` for approval → continuation → stale `message-updated`/`messages-replaced` sync → final reasoning/text preservation.
+- Rendering regression in `src/tests/humanInTheLoopRendering.svelte.test.ts` using a small Svelte transcript harness to verify initial reasoning, final reasoning, tool output, and final text remain visible.
+
+API changes to consider:
+
+- No new public API yet. The fixes are transport/controller robustness around existing approval and continuation APIs.
+
 ## tool-calls
 
 Status: implemented; browser dogfooding still needed.
