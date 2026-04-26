@@ -15,6 +15,13 @@ import { camelCaseToKebabCase } from "./utils.ts";
 
 type QueryObject = Record<string, string | null>;
 
+type AgentRouteSegment = {
+  agent: string;
+  name: string;
+};
+
+type SubAgentRoute = AgentRouteSegment;
+
 export interface CreateAgentOptions {
   agent: string;
   name?: string;
@@ -26,6 +33,7 @@ export interface CreateAgentOptions {
   protocols?: string[];
   id?: string;
   prefix?: string;
+  sub?: ReadonlyArray<SubAgentRoute>;
 }
 
 type OptionalArgsCall<AgentT> = <K extends keyof OptionalAgentMethods<AgentT>>(
@@ -68,6 +76,7 @@ export interface IdentityChange {
 
 export class Agent<AgentT = unknown, State = unknown> {
   readonly socket: PartySocket;
+  readonly path: ReadonlyArray<AgentRouteSegment>;
 
   state = $state<State | undefined>(undefined);
   identity = $state<Identity>({
@@ -103,6 +112,20 @@ export class Agent<AgentT = unknown, State = unknown> {
   constructor(options: CreateAgentOptions) {
     const agentNamespace = camelCaseToKebabCase(options.agent);
     const roomName = options.name ?? "default";
+    const prefix = options.prefix ?? "agents";
+    const subPath = options.sub
+      ?.map(
+        (sub) =>
+          `sub/${camelCaseToKebabCase(sub.agent)}/${encodeURIComponent(sub.name)}`
+      )
+      .join("/");
+    this.path = [
+      { agent: agentNamespace, name: roomName },
+      ...(options.sub?.map((sub) => ({
+        agent: camelCaseToKebabCase(sub.agent),
+        name: sub.name
+      })) ?? [])
+    ];
 
     if (agentNamespace !== agentNamespace.toLowerCase()) {
       console.warn(
@@ -111,8 +134,8 @@ export class Agent<AgentT = unknown, State = unknown> {
     }
 
     this.identity = {
-      name: roomName,
-      agent: agentNamespace,
+      name: this.path.at(-1)?.name ?? roomName,
+      agent: this.path.at(-1)?.agent ?? agentNamespace,
       identified: false
     };
 
@@ -137,7 +160,7 @@ export class Agent<AgentT = unknown, State = unknown> {
       ? { basePath: options.basePath }
       : {
           party: agentNamespace,
-          prefix: options.prefix ?? "agents",
+          prefix,
           room: roomName
         };
 
@@ -164,10 +187,14 @@ export class Agent<AgentT = unknown, State = unknown> {
     const path = options.path ? `/${options.path}` : "";
     const route = options.basePath
       ? options.basePath
-      : `${options.prefix ?? "agents"}/${agentNamespace}/${roomName}`;
+      : [prefix, agentNamespace, roomName, subPath].filter(Boolean).join("/");
     this.#httpUrl = `${httpProtocol}://${normalizedHost}/${route}${path}`;
 
-    this.socket = new PartySocket({ ...baseSocketOpts, ...routingOpts });
+    const socketOpts = subPath
+      ? { ...baseSocketOpts, basePath: route }
+      : { ...baseSocketOpts, ...routingOpts };
+
+    this.socket = new PartySocket(socketOpts);
     this.socket.addEventListener("message", this.#handleMessage);
     this.socket.addEventListener("open", this.#handleOpen);
     this.socket.addEventListener("close", this.#handleClose);

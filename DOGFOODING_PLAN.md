@@ -107,27 +107,33 @@ Question to answer:
 
 > Is `agent` + `chat` as two objects annoying, or does it feel correct because the agent connection is reusable?
 
-### 2. `examples/stateful-agent`
+### 2. `examples/multi-ai-chat`
 
-Purpose: prove `Agent` alone is useful without chat.
+Purpose: mirror Cloudflare's `examples/multi-ai-chat` pattern in Svelte.
+
+Status: initial implementation complete; browser dogfooding still needed.
 
 Features:
 
-- server agent with state, such as a counter, todos, or preferences
-- client reads `agent.state`
-- client calls server methods through `agent.call(...)` or `agent.stub`
-- render `agent.connected`, `agent.identity`, and `agent.lastStateUpdate`
+- top-level `Inbox` agent owns chat list and shared per-user memory
+- each chat is a `Chat` `AIChatAgent` sub-agent under `/agents/inbox/{user}/sub/chat/{chatId}`
+- client reads reactive `inbox.state` for the sidebar
+- client calls server methods through typed `inbox.stub`
+- active chat uses `createAgent({ sub: [...] })` plus `createAgentChat(...)`
+- shared memory can be edited manually and is injected into each chat's prompt
+- server-side tools let the model remember facts, recall memory, and get current time
 
 Validates:
 
-- `Agent` as a Svelte reactive controller
+- sub-agent routing in `createAgent(...)`
+- Svelte reactive derivation of active chat state
 - typed RPC ergonomics
-- state sync semantics
-- identity/connect lifecycle
+- state sync semantics across parent and child agents
+- multiple persistent chat sessions backed by one inbox
 
 Question to answer:
 
-> Does this feel like a Svelte controller, or like a React hook wearing a class costume?
+> Does the official multi-session chat pattern feel natural when expressed with Svelte reactivity instead of React hooks?
 
 ### 3. `examples/tool-calls`
 
@@ -254,7 +260,7 @@ These examples should feel like Svelte counterparts to Cloudflare's official exa
 | Svelte example            | Closest official Cloudflare example          | Notes                                                                                                                                               |
 | ------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `examples/basic-chat`     | `cloudflare/agents/examples/ai-chat`         | Official code currently uses `@cf/moonshotai/kimi-k2.6`; this repo may use cheaper Gemma during dogfooding.                                         |
-| `examples/stateful-agent` | `cloudflare/agents/examples/multi-ai-chat`   | Official example has persisted chats and shared memory. For this package, keep the first stateful example smaller if it better tests `Agent` alone. |
+| `examples/multi-ai-chat` | `cloudflare/agents/examples/multi-ai-chat`   | Svelte port of the official multi-session chat example with an inbox agent, chat sub-agents, and shared memory. |
 | `examples/tool-calls`     | `cloudflare/agents/examples/dynamic-tools`   | Best match for client-provided tools and the Svelte tool-call handle API.                                                                           |
 | `examples/human-approval` | `cloudflare/agents/guides/human-in-the-loop` | Best match for chat tool approval via `needsApproval`.                                                                                              |
 | `examples/voice-input`    | `cloudflare/agents/examples/voice-input`     | STT-only dictation; no LLM prompt.                                                                                                                  |

@@ -37,6 +37,33 @@ API changes to consider:
 - No package API change is needed for local UI state reset after `clearHistory()`.
 - Usage/cost display should remain example-local unless the Agents/AI SDK path exposes reliable usage metadata in a standard way.
 
+## multi-ai-chat
+
+Status: initial implementation complete; browser dogfooding still needed.
+
+Official example mirrored:
+
+- Closest match: `cloudflare/agents/examples/multi-ai-chat`
+- Official model: `@cf/moonshotai/kimi-k2.5`
+- Current dogfooding model: `@cf/google/gemma-4-26b-a4b-it`
+
+Felt good:
+
+- The parent `Inbox` agent plus child `Chat` sub-agent pattern maps cleanly to Svelte state: `inbox.state` drives the sidebar, and the active chat is derived from the selected chat id.
+- Typed `inbox.stub` calls make sidebar operations straightforward: create, rename, delete, load memory, and save memory.
+- The UI can keep Cloudflare's multi-session chat shape while using Svelte runes for selection, usage, memory draft state, and scrolling effects.
+
+Felt awkward:
+
+- The Svelte adapter did not expose the official React `sub: [...]` option, so this example required adding sub-agent routing support to `createAgent(...)`.
+- Deriving an active chat connection from `activeId` needs browser testing. This is the intended explicit-lifetime path: factories are for component init with automatic `onDestroy`, while classes are for dynamic or non-component lifetimes with explicit `close()`.
+- The initial implementation mirrors behavior and validates with typecheck/build, but it still needs browser testing for sub-agent WebSocket routing and shared memory tools.
+
+API changes to consider:
+
+- Keep `sub` in `CreateAgentOptions` if browser testing confirms it behaves correctly.
+- Document two Svelte-native lifetime patterns clearly: factory calls at component init, or direct classes with explicit cleanup for dynamic identities.
+
 ## tool-calls
 
 Status: implemented; browser dogfooding still needed.
