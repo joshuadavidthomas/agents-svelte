@@ -11,7 +11,9 @@ This package is not maintained by Cloudflare. It is intentionally **not** a hook
 
 ## Status
 
-Experimental. Ships source-only for now — the consumer's `vite-plugin-svelte` compiles the `.svelte.ts` files. The API may change before `1.0`.
+Experimental. The API may change before `1.0`.
+
+This package ships source-only for now. Consumers need Svelte 5 tooling that can compile `.svelte.ts` files, such as Vite with `@sveltejs/vite-plugin-svelte`. TypeScript consumers should use bundler-style module resolution.
 
 ## Install
 

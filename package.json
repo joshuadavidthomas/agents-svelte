@@ -15,13 +15,13 @@
   "svelte": "./src/index.ts",
   "private": false,
   "author": "Josh Thomas",
-  "homepage": "https://github.com/joshthomas/cloudflare-agents-svelte#readme",
+  "homepage": "https://github.com/joshuadavidthomas/cloudflare-agents-svelte#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joshthomas/cloudflare-agents-svelte.git"
+    "url": "git+https://github.com/joshuadavidthomas/cloudflare-agents-svelte.git"
   },
   "bugs": {
-    "url": "https://github.com/joshthomas/cloudflare-agents-svelte/issues"
+    "url": "https://github.com/joshuadavidthomas/cloudflare-agents-svelte/issues"
   },
   "publishConfig": {
     "access": "public"
