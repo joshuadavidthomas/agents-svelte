@@ -1,0 +1,27 @@
+{
+  "name": "voice-input",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@cloudflare/voice": ">=0.1.0 <1.0.0",
+    "@joshthomas/cloudflare-agents-svelte": "file:../..",
+    "agents": ">=0.9.0 <1.0.0",
+    "partysocket": "^1.0.0",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.33.2",
+    "@cloudflare/workers-types": "^4.20260418.1",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "svelte-check": "^4.3.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.8",
+    "wrangler": "^4.83.0"
+  }
+}
