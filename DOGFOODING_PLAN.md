@@ -133,14 +133,16 @@ Question to answer:
 
 Purpose: prove the main Svelte-first tool-call API decision.
 
+Status: implemented; browser dogfooding still needed.
+
 Features:
 
 - agent emits a client-side tool call
-- UI lists `chat.pendingToolCalls`
-- button calls `toolCall.run(...)`
-- show `toolCall.running`, `toolCall.handled`, and `toolCall.lastError`
-- test both success and error output paths
-- include a variant with `autoContinueAfterToolResult: false`
+- UI lists pending and completed tool calls from `chat.messages`
+- client handles `chat.pendingToolCalls` with `toolCall.run(...)`
+- shows tool running/done/error state in the transcript
+- tests both success and error output paths
+- uses `autoContinueAfterToolResult: false` with `sendAutomaticallyWhen`
 
 Validates:
 

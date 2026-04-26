@@ -37,9 +37,33 @@ API changes to consider:
 - No package API change is needed for local UI state reset after `clearHistory()`.
 - Usage/cost display should remain example-local unless the Agents/AI SDK path exposes reliable usage metadata in a standard way.
 
+## tool-calls
+
+Status: implemented; browser dogfooding still needed.
+
+Official example mirrored:
+
+- Closest match: `cloudflare/agents/examples/dynamic-tools`
+- Official model: `@cf/moonshotai/kimi-k2.6`
+- Current dogfooding model: `@cf/google/gemma-4-26b-a4b-it`
+
+Felt good:
+
+- Dynamic client tool schemas fit naturally in `body: () => ({ clientTools: activeTools })`.
+- `chat.pendingToolCalls` plus `toolCall.run(...)` works well for automatic browser-side tools.
+- `toolCall.addOutput({ state: "output-error", errorText })` is understandable for disabled tools.
+- Rendering tool parts directly from `chat.messages` is straightforward enough for a public example.
+
+Felt awkward:
+
+- `autoContinueAfterToolResult: false` with `sendAutomaticallyWhen` is more subtle than the default continuation path. It is expressible without adding a chat-level helper, but the example should be tested in a browser before deciding whether the docs need more explanation.
+- The example needs real browser testing to confirm the model calls tools reliably with Gemma.
+
+API changes to consider:
+
+- None yet. Revisit after browser testing the full tool-call loop.
+
 Docs needed:
 
-- Explain that local Workers AI auth comes from Wrangler/Cloudflare login when `wrangler.jsonc` uses an AI binding with `remote: true`.
-- Note that the example uses a cheaper Workers AI model during dogfooding and may switch to the official Cloudflare example model before publish.
-- If token/cost display stays, document that it is an estimate unless provider usage metadata is available.
-- Keep README/example copy aligned with official Cloudflare examples and avoid internal dogfooding language.
+- Explain that client tools are sent as serializable schemas in the request body and executed in the browser through `toolCall.run(...)`.
+- Keep official-example parity notes in dogfooding docs, not public example UI.
