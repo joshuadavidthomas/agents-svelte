@@ -186,7 +186,7 @@
         </div>
       </div>
       <div class="route-meta">
-        <span>{chat.isStreaming ? "Streaming" : "Idle"}</span>
+        <span>{chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle"}</span>
       </div>
     </div>
   </div>

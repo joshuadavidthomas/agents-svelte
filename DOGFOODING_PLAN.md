@@ -164,7 +164,7 @@ Question to answer:
 
 If this example feels awkward, fix the package before publishing.
 
-### 4. `examples/human-approval`
+### 4. `examples/human-in-the-loop`
 
 Purpose: prove approval UX.
 
@@ -262,7 +262,7 @@ These examples should feel like Svelte counterparts to Cloudflare's official exa
 | `examples/basic-chat`     | `cloudflare/agents/examples/ai-chat`         | Official code currently uses `@cf/moonshotai/kimi-k2.6`; this repo may use cheaper Gemma during dogfooding.                                         |
 | `examples/multi-ai-chat` | `cloudflare/agents/examples/multi-ai-chat`   | Svelte port of the official multi-session chat example with an inbox agent, chat sub-agents, and shared memory. |
 | `examples/tool-calls`     | `cloudflare/agents/examples/dynamic-tools`   | Best match for client-provided tools and the Svelte tool-call handle API.                                                                           |
-| `examples/human-approval` | `cloudflare/agents/guides/human-in-the-loop` | Best match for chat tool approval via `needsApproval`.                                                                                              |
+| `examples/human-in-the-loop` | `cloudflare/agents/guides/human-in-the-loop` | Best match for chat tool approval via `needsApproval`.                                                                                              |
 | `examples/voice-input`    | `cloudflare/agents/examples/voice-input`     | STT-only dictation; no LLM prompt.                                                                                                                  |
 | `examples/voice-agent`    | `cloudflare/agents/examples/voice-agent`     | Full conversational voice example; can wait until core chat/tool APIs feel good.                                                                    |
 

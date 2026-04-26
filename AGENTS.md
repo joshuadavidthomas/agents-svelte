@@ -77,7 +77,7 @@ Current planned mappings:
 | `examples/basic-chat`     | `cloudflare/agents/examples/ai-chat`         |
 | `examples/multi-ai-chat` | `cloudflare/agents/examples/multi-ai-chat`   |
 | `examples/tool-calls`     | `cloudflare/agents/examples/dynamic-tools`   |
-| `examples/human-approval` | `cloudflare/agents/guides/human-in-the-loop` |
+| `examples/human-in-the-loop` | `cloudflare/agents/guides/human-in-the-loop` |
 | `examples/voice-input`    | `cloudflare/agents/examples/voice-input`     |
 | `examples/voice-agent`    | `cloudflare/agents/examples/voice-agent`     |
 

@@ -59,6 +59,8 @@ type AgentChatTransportStartOptions<ChatMessage extends UIMessage = UIMessage> =
 
 type ActiveStreamSession = {
   controller: ReadableStreamDefaultController<UIMessageChunk>;
+  activeTextIds: Set<string>;
+  activeReasoningIds: Set<string>;
   finish: (
     action: () => void,
     options?: { ignoreRemaining?: boolean; emitLocalFinish?: boolean }
@@ -361,7 +363,7 @@ export class AgentChatTransport<
       if (requestId && session) {
         session.finish(action, {
           ignoreRemaining: options?.ignoreRemaining,
-          emitLocalFinish: false
+          emitLocalFinish: true
         });
       } else {
         try {
@@ -456,6 +458,8 @@ export class AgentChatTransport<
     let completed = false;
     const session: ActiveStreamSession = {
       controller,
+      activeTextIds: new Set(),
+      activeReasoningIds: new Set(),
       finish: (action, options) => {
         if (completed) return;
         completed = true;
@@ -563,11 +567,7 @@ export class AgentChatTransport<
       }
 
       if (chunkData !== undefined) {
-        try {
-          session.controller.enqueue(chunkData);
-        } catch {
-          // Stream may already be closed.
-        }
+        this.#enqueueChunk(session, chunkData);
       }
 
       if (data.done) {
@@ -596,6 +596,65 @@ export class AgentChatTransport<
       replayComplete: data.replayComplete,
       continuation: data.continuation
     });
+  }
+
+  #enqueueChunk(session: ActiveStreamSession, chunk: UIMessageChunk): void {
+    try {
+      // Keep the direct ChatTransport stream as tolerant as agents/chat's
+      // message-builder fallback: resumed and continuation streams can miss a
+      // text-start/reasoning-start chunk while still delivering deltas/ends.
+      if (this.#isTextStart(chunk)) {
+        session.activeTextIds.add(chunk.id);
+      } else if (this.#isTextDelta(chunk) || this.#isTextEnd(chunk)) {
+        if (!session.activeTextIds.has(chunk.id)) {
+          session.activeTextIds.add(chunk.id);
+          session.controller.enqueue({ type: "text-start", id: chunk.id });
+        }
+        if (this.#isTextEnd(chunk)) {
+          session.activeTextIds.delete(chunk.id);
+        }
+      }
+
+      if (this.#isReasoningStart(chunk)) {
+        session.activeReasoningIds.add(chunk.id);
+      } else if (this.#isReasoningDelta(chunk) || this.#isReasoningEnd(chunk)) {
+        if (!session.activeReasoningIds.has(chunk.id)) {
+          session.activeReasoningIds.add(chunk.id);
+          session.controller.enqueue({ type: "reasoning-start", id: chunk.id });
+        }
+        if (this.#isReasoningEnd(chunk)) {
+          session.activeReasoningIds.delete(chunk.id);
+        }
+      }
+
+      session.controller.enqueue(chunk);
+    } catch {
+      // Stream may already be closed.
+    }
+  }
+
+  #isTextStart(chunk: UIMessageChunk): chunk is UIMessageChunk & { id: string } {
+    return chunk.type === "text-start" && "id" in chunk && typeof chunk.id === "string";
+  }
+
+  #isTextDelta(chunk: UIMessageChunk): chunk is UIMessageChunk & { id: string } {
+    return chunk.type === "text-delta" && "id" in chunk && typeof chunk.id === "string";
+  }
+
+  #isTextEnd(chunk: UIMessageChunk): chunk is UIMessageChunk & { id: string } {
+    return chunk.type === "text-end" && "id" in chunk && typeof chunk.id === "string";
+  }
+
+  #isReasoningStart(chunk: UIMessageChunk): chunk is UIMessageChunk & { id: string } {
+    return chunk.type === "reasoning-start" && "id" in chunk && typeof chunk.id === "string";
+  }
+
+  #isReasoningDelta(chunk: UIMessageChunk): chunk is UIMessageChunk & { id: string } {
+    return chunk.type === "reasoning-delta" && "id" in chunk && typeof chunk.id === "string";
+  }
+
+  #isReasoningEnd(chunk: UIMessageChunk): chunk is UIMessageChunk & { id: string } {
+    return chunk.type === "reasoning-end" && "id" in chunk && typeof chunk.id === "string";
   }
 
   #rememberLocalMessageId(requestId: string, chunkData: unknown): void {

@@ -222,6 +222,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     anchorMessageId: string | null;
   } | null = null;
   #closed = false;
+  readonly #continuationStreamsSeeded = new Set<string>();
   #clientContinuationPromise: Promise<void> | null = null;
   #clientContinuationRequested = false;
   #cleanupPendingToolCallsEffect: (() => void) | null = null;
@@ -395,6 +396,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       if (toolCallId) break;
     }
     if (toolCallId) {
+      this.#applyToolApprovalLocally(opts);
       this.#transport.sendToolApproval({
         toolCallId,
         approved: opts.approved,
@@ -417,7 +419,6 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       }
       return;
     }
-    this.#applyToolApprovalLocally(opts);
     void this.#continueFromClientWhenConfigured().catch(() => {});
   };
 
@@ -468,12 +469,14 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       return;
     }
 
+    this.#protectCurrentAssistantTail();
     this.#transport.prepareToolContinuation();
     void this.resumeStream().catch(() => {});
   }
 
   #resetStreamState(): void {
     this.#streamState.current = { status: "idle" } as BroadcastStreamState;
+    this.#continuationStreamsSeeded.clear();
     this.isServerStreaming = false;
   }
 
@@ -582,13 +585,6 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         messageId: last.id,
         input: (part as { input?: unknown }).input,
         addOutput: (opts) => {
-          this.#sendToolOutputToServer(
-            opts.toolCallId,
-            toolName,
-            opts.output,
-            opts.state,
-            opts.errorText
-          );
           this.#applyToolOutputLocally({
             toolCallId: opts.toolCallId,
             messageId: opts.messageId,
@@ -598,6 +594,13 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
               ? { errorText: opts.errorText }
               : {})
           });
+          this.#sendToolOutputToServer(
+            opts.toolCallId,
+            toolName,
+            opts.output,
+            opts.state,
+            opts.errorText
+          );
           void this.#continueFromClientWhenConfigured().catch(() => {});
         }
       });
@@ -638,6 +641,22 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       return;
     }
 
+    this.#protectLastAssistantTail();
+  }
+
+  #protectCurrentAssistantTail(): void {
+    const last = this.messages.at(-1);
+    if (last?.role !== "assistant") {
+      return;
+    }
+
+    this.#protectedStreamingAssistant = {
+      assistantId: last.id,
+      anchorMessageId: this.messages.at(-2)?.id ?? null
+    };
+  }
+
+  #protectLastAssistantTail(): void {
     let assistantIndex = -1;
     let assistantMessage: M | undefined;
     for (let i = this.messages.length - 1; i >= 0; i--) {
@@ -710,6 +729,79 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
 
     this.messages = result;
+  }
+
+  #messagesForContinuation(chunkData: unknown): M[] {
+    const repair = this.#isMissingStartDelta(chunkData);
+    if (!repair) {
+      return this.messages;
+    }
+
+    const assistantIndex = this.#lastAssistantIndex(this.messages);
+    const assistant = this.messages[assistantIndex];
+    if (assistantIndex < 0 || !assistant) {
+      return this.messages;
+    }
+
+    const lastSameType = [...assistant.parts]
+      .reverse()
+      .find((part) => part.type === repair.partType) as
+      | ({ state?: string } & M["parts"][number])
+      | undefined;
+    if (lastSameType?.state === "streaming") {
+      return this.messages;
+    }
+
+    const next = [...this.messages];
+    next[assistantIndex] = {
+      ...assistant,
+      parts: [...assistant.parts, repair.part]
+    };
+    return next;
+  }
+
+  #isMissingStartDelta(chunkData: unknown):
+    | false
+    | {
+        partType: "text" | "reasoning";
+        part: M["parts"][number];
+      } {
+    if (typeof chunkData !== "object" || chunkData === null) {
+      return false;
+    }
+
+    const chunk = chunkData as { type?: unknown; delta?: unknown };
+    if (chunk.type === "text-delta") {
+      return {
+        partType: "text",
+        part: {
+          type: "text",
+          text: "",
+          state: "streaming"
+        } as M["parts"][number]
+      };
+    }
+    if (chunk.type === "reasoning-delta") {
+      return {
+        partType: "reasoning",
+        part: {
+          type: "reasoning",
+          text: "",
+          state: "streaming"
+        } as M["parts"][number]
+      };
+    }
+
+    return false;
+  }
+
+  #lastAssistantIndex(messages: readonly M[]): number {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.role === "assistant") {
+        return i;
+      }
+    }
+    return -1;
   }
 
   #updateMessageParts(
@@ -849,6 +941,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         break;
 
       case "message-updated": {
+        if (this.#protectedStreamingAssistant?.assistantId === event.message.id) {
+          break;
+        }
+
         const updated = event.message;
         const prev = this.messages;
         let idx = prev.findIndex((m) => m.id === updated.id);
@@ -889,6 +985,11 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         break;
 
       case "broadcast-response": {
+        if (event.continuation && !this.#continuationStreamsSeeded.has(event.streamId)) {
+          this.#streamState.current = { status: "idle" } as BroadcastStreamState;
+          this.#continuationStreamsSeeded.add(event.streamId);
+        }
+
         const result = broadcastTransition(this.#streamState.current, {
           type: "response",
           streamId: event.streamId,
@@ -899,7 +1000,9 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           replay: event.replay,
           replayComplete: event.replayComplete,
           continuation: event.continuation,
-          currentMessages: event.continuation ? this.messages : undefined
+          currentMessages: event.continuation
+            ? this.#messagesForContinuation(event.chunkData)
+            : undefined
         });
         this.#streamState.current = result.state;
         if (result.messagesUpdate) {
@@ -909,6 +1012,9 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           this.messages = updater(this.messages);
         }
         this.isServerStreaming = result.isStreaming;
+        if (event.done) {
+          this.#continuationStreamsSeeded.delete(event.streamId);
+        }
         break;
       }
 

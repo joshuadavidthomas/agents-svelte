@@ -251,7 +251,7 @@
           <strong>{formattedCost}</strong>
           {#if usage.estimated}<em>est.</em>{/if}
         </div>
-        <div class="usage-meta"><span>{chat?.isStreaming ? "Streaming" : "Idle"}</span></div>
+        <div class="usage-meta"><span>{chat?.status === "submitted" ? "Thinking" : chat?.isStreaming ? "Streaming" : "Idle"}</span></div>
       </footer>
     </aside>
 
@@ -270,7 +270,7 @@
                 {#if part.type === "text"}
                   <p>{part.text}</p>
                 {:else if part.type === "reasoning" && part.text?.trim()}
-                  <details><summary>Thinking</summary><p>{part.text}</p></details>
+                  <details class="reasoning"><summary>Thinking</summary><p>{part.text}</p></details>
                 {:else if part.type.startsWith("tool-")}
                   <div class="tool-card">
                     <strong>{toolName(part)}</strong>
@@ -333,7 +333,9 @@
   .message.user { margin-left: auto; background: #111827; color: #fff; }
   .message.assistant { margin-right: auto; border: 1px solid #e5e7eb; background: #fff; }
   .message p + p { margin-top: 0.75rem; }
-  details { color: #6b7280; font-size: 0.875rem; }
+  .reasoning { margin-bottom: 0.75rem; border-radius: 0.75rem; padding: 0.625rem 0.75rem; color: #6b7280; background: #f3f4f6; }
+  .reasoning summary { color: #4b5563; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+  .reasoning p { margin-top: 0.5rem; font-size: 0.8125rem; font-style: italic; line-height: 1.5; white-space: pre-wrap; }
   .tool-card { display: grid; gap: 0.5rem; margin-top: 0.5rem; border: 1px solid #bfdbfe; border-radius: 0.75rem; padding: 0.75rem; background: #eff6ff; color: #1e3a8a; font-size: 0.8125rem; }
   pre { overflow-x: auto; margin: 0; white-space: pre-wrap; }
   .empty, .center-card { max-width: 36rem; margin: 2rem auto; border: 1px solid #e5e7eb; border-radius: 0.875rem; padding: 2rem; background: #fff; color: #6b7280; text-align: center; }

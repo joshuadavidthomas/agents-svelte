@@ -270,7 +270,7 @@
           </div>
         </div>
         <div class="route-meta">
-          <span>{chat.isStreaming ? "Streaming" : "Idle"}</span>
+          <span>{chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle"}</span>
         </div>
       </footer>
     </aside>
@@ -293,7 +293,7 @@
                 {:else if part.type === "reasoning" && partText(part).trim()}
                   <details class="reasoning">
                     <summary>Thinking</summary>
-                    <pre>{partText(part)}</pre>
+                    <p>{partText(part)}</p>
                   </details>
                 {:else if part.type.startsWith("tool-")}
                   <div class="tool-card">
@@ -610,11 +610,27 @@
 
   .reasoning {
     margin-bottom: 0.75rem;
+    border-radius: 0.75rem;
+    padding: 0.625rem 0.75rem;
     color: #6b7280;
-    font-size: 0.8125rem;
+    background: #f3f4f6;
   }
 
-  .reasoning pre,
+  .reasoning summary {
+    color: #4b5563;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .reasoning p {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    font-style: italic;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
   .tool-card pre {
     overflow-x: auto;
     margin: 0.5rem 0 0;

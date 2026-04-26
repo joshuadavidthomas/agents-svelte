@@ -1499,6 +1499,144 @@ describe("createAgentChat — lifetime cleanup", () => {
   });
 });
 
+describe("createAgentChat — stream chunk repair", () => {
+  it("synthesizes reasoning-start when a direct stream receives reasoning-delta first", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    void chat.sendMessage({ text: "think" });
+
+    let requestId = "";
+    await vi.waitFor(() => {
+      requestId = String(
+        findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? ""
+      );
+      expect(requestId).not.toBe("");
+    });
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: '{"type":"start","messageId":"assistant-reasoning"}',
+      done: false
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: '{"type":"reasoning-delta","id":"reason-1","delta":"Thinking"}',
+      done: false
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: '{"type":"reasoning-end","id":"reason-1"}',
+      done: false
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: "",
+      done: true
+    });
+
+    await vi.waitFor(() => {
+      const assistant = chat.messages.find(
+        (message) => message.id === "assistant-reasoning"
+      );
+      expect(assistant?.parts).toEqual([
+        {
+          type: "reasoning",
+          text: "Thinking",
+          state: "done"
+        }
+      ]);
+    });
+  });
+
+  it("starts a new reasoning part when a continuation stream receives reasoning-delta first", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, {
+      resume: true,
+      initialMessages: [
+        {
+          id: "user-1",
+          role: "user",
+          parts: [{ type: "text", text: "weather in LA" }]
+        },
+        {
+          id: "assistant-approval",
+          role: "assistant",
+          parts: [
+            {
+              type: "reasoning",
+              text: "Initial reasoning",
+              state: "done"
+            },
+            {
+              type: "tool-getWeatherInformation",
+              toolCallId: "call-weather",
+              state: "approval-responded",
+              input: { city: "Los Angeles" },
+              output: "The weather in Los Angeles is sunny, 72°F.",
+              approval: { id: "approval-weather", approved: true }
+            } as never
+          ]
+        }
+      ]
+    });
+    await waitForChatInitialized(chat);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: "approval-continuation"
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "approval-continuation",
+      body: '{"type":"reasoning-delta","id":"reason-2","delta":"Final reasoning"}',
+      done: false,
+      continuation: true
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "approval-continuation",
+      body: '{"type":"reasoning-end","id":"reason-2"}',
+      done: false,
+      continuation: true
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "approval-continuation",
+      body: '{"type":"text-delta","id":"text-2","delta":"Here is the approved weather."}',
+      done: false,
+      continuation: true
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "approval-continuation",
+      body: "",
+      done: true,
+      continuation: true
+    });
+
+    await vi.waitFor(() => {
+      const assistant = chat.messages.find(
+        (message) => message.id === "assistant-approval"
+      );
+      expect(
+        assistant?.parts.filter((part) => part.type === "reasoning")
+      ).toEqual([
+        { type: "reasoning", text: "Initial reasoning", state: "done" },
+        { type: "reasoning", text: "Final reasoning", state: "done" }
+      ]);
+      expect(
+        assistant?.parts.find((part) => part.type === "text")
+      ).toMatchObject({ text: "Here is the approved weather." });
+    });
+  });
+});
+
 describe("createAgentChat — isStreaming flag", () => {
   it("isStreaming reflects chat.status OR server stream", async () => {
     const mock = createMockAgent();
