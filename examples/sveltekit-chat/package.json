@@ -1,0 +1,32 @@
+{
+  "name": "sveltekit-chat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "worker": "wrangler dev --config wrangler.agent.jsonc --port 8787",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@ai-sdk/svelte": "^4.0.0",
+    "@cloudflare/ai-chat": ">=0.3.2 <1.0.0",
+    "@joshthomas/cloudflare-agents-svelte": "file:../..",
+    "@sveltejs/adapter-cloudflare": "^7.2.8",
+    "@sveltejs/kit": "^2.58.0",
+    "agents": ">=0.9.0 <1.0.0",
+    "ai": "^6.0.0",
+    "partysocket": "^1.0.0",
+    "svelte": "^5.0.0",
+    "workers-ai-provider": "^3.1.12"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/node": "^25.6.0",
+    "svelte-check": "^4.3.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.8",
+    "wrangler": "^4.83.0"
+  }
+}

@@ -80,6 +80,7 @@ Current planned mappings:
 | `examples/human-in-the-loop` | `cloudflare/agents/guides/human-in-the-loop` |
 | `examples/voice-input`       | `cloudflare/agents/examples/voice-input`     |
 | `examples/voice-agent`       | `cloudflare/agents/examples/voice-agent`     |
+| `examples/sveltekit-chat`    | SvelteKit SSR integration example            |
 
 ## Parity guidance
 
@@ -135,6 +136,15 @@ For `examples/basic-chat`, run:
 cd examples/basic-chat
 npm run check
 npm run build
+```
+
+For `examples/sveltekit-chat`, run:
+
+```bash
+cd examples/sveltekit-chat
+npm run check
+npm run build
+npx wrangler deploy --dry-run --config wrangler.agent.jsonc
 ```
 
 Add equivalent validation notes as new examples are created.

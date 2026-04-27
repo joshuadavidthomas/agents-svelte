@@ -33,6 +33,16 @@ For voice, also install:
 npm install @cloudflare/voice
 ```
 
+## Examples
+
+- `examples/basic-chat` — minimal Svelte chat app with an `AIChatAgent`
+- `examples/tool-calls` — client-side tools resolved through Svelte tool-call handles
+- `examples/multi-ai-chat` — inbox agent with chat sub-agents and shared memory
+- `examples/human-in-the-loop` — AI SDK tool approval flow
+- `examples/voice-input` — dictation-focused voice input
+- `examples/voice-agent` — conversational voice agent with optional WebRTC/SFU path
+- `examples/sveltekit-chat` — SvelteKit SSR route using Agent factories safely during component setup
+
 ## Modules
 
 | Subpath                                      | Exports                                                                                       | Replaces                                                        |
