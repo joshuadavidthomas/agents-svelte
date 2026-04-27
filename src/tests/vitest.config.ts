@@ -8,14 +8,12 @@ const TEST_WORKER_PORT = 18788;
 
 const testsDir = import.meta.dirname;
 const agentsTestsDir = path.resolve(testsDir, "../../../agents/src/tests");
-const hasIntegrationWorker = fs.existsSync(
-  path.join(agentsTestsDir, "worker.ts")
-);
+const hasIntegrationWorker = fs.existsSync(path.join(agentsTestsDir, "worker.ts"));
 
 export default defineConfig({
   plugins: [svelte()],
   define: {
-    __TEST_WORKER_URL__: JSON.stringify(`http://localhost:${TEST_WORKER_PORT}`)
+    __TEST_WORKER_URL__: JSON.stringify(`http://localhost:${TEST_WORKER_PORT}`),
   },
   test: {
     name: "svelte",
@@ -24,19 +22,19 @@ export default defineConfig({
       instances: [
         {
           browser: "chromium",
-          headless: true
-        }
+          headless: true,
+        },
       ],
-      provider: playwright()
+      provider: playwright(),
     },
     clearMocks: true,
     globalSetup: hasIntegrationWorker ? [path.join(testsDir, "setup.ts")] : [],
     include: ["src/tests/**/*.test.ts"],
     fileParallelism: false,
     exclude: hasIntegrationWorker
-      ? []
-      : ["src/tests/createAgent.svelte.test.ts"],
+      ? ["src/tests/ssr-factories.test.ts"]
+      : ["src/tests/createAgent.svelte.test.ts", "src/tests/ssr-factories.test.ts"],
     testTimeout: 30000,
-    hookTimeout: 120000
-  }
+    hookTimeout: 120000,
+  },
 });

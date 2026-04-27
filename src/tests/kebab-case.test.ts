@@ -8,7 +8,7 @@ describe("camelCaseToKebabCase", () => {
     ["MY_AGENT", "my-agent"],
     ["My_Agent", "my--agent"],
     ["TestStateAgent", "test-state-agent"],
-    ["Already-Kebab", "already--kebab"]
+    ["Already-Kebab", "already--kebab"],
   ])("converts %s to %s", (input, expected) => {
     expect(camelCaseToKebabCase(input)).toBe(expected);
   });

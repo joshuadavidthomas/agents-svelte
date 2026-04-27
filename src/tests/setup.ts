@@ -31,9 +31,7 @@ function isPortAvailable(port: number): Promise<boolean> {
 
 function killProcessOnPort(port: number): void {
   try {
-    const output = execSync(`lsof -ti tcp:${port} 2>/dev/null || true`)
-      .toString()
-      .trim();
+    const output = execSync(`lsof -ti tcp:${port} 2>/dev/null || true`).toString().trim();
     if (output) {
       const pids = output.split("\n").filter(Boolean);
       for (const pid of pids) {
@@ -67,9 +65,7 @@ async function stopWorker() {
 async function doSetup() {
   const portAvailable = await isPortAvailable(TEST_WORKER_PORT);
   if (!portAvailable) {
-    console.log(
-      `[setup] Port ${TEST_WORKER_PORT} in use — killing stale process...`
-    );
+    console.log(`[setup] Port ${TEST_WORKER_PORT} in use — killing stale process...`);
     killProcessOnPort(TEST_WORKER_PORT);
     await new Promise((r) => setTimeout(r, 500));
   }
@@ -92,17 +88,15 @@ async function doSetup() {
     globalThis.__svelteTestWorker__ = await unstable_dev(workerPath, {
       config: configPath,
       experimental: {
-        disableExperimentalWarning: true
+        disableExperimentalWarning: true,
       },
       port: TEST_WORKER_PORT,
       ip: "0.0.0.0",
       persist: false,
-      logLevel: "warn"
+      logLevel: "warn",
     });
 
-    console.log(
-      `[setup] Svelte test worker started at http://127.0.0.1:${TEST_WORKER_PORT}`
-    );
+    console.log(`[setup] Svelte test worker started at http://127.0.0.1:${TEST_WORKER_PORT}`);
   } catch (error) {
     console.error("[setup] Failed to start svelte test worker:", error);
     throw error;

@@ -26,14 +26,13 @@ async function waitForIdentified(agent: IdentifiedAgentLike, timeout = 10000) {
     () => {
       expect(agent.identity.identified).toBe(true);
     },
-    { timeout }
+    { timeout },
   );
 }
 
-function makeAgent<State = unknown>(
-  options: CreateAgentOptions
-): Agent<unknown, State> {
+function makeAgent<State = unknown>(options: CreateAgentOptions): Agent<unknown, State> {
   const agent = new Agent<unknown, State>(options);
+  agent.connect();
   cleanups.push(() => agent.close());
   return agent;
 }
@@ -46,7 +45,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-identity",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
@@ -63,7 +62,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-on-identity",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
@@ -79,7 +78,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-ready",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
@@ -93,14 +92,14 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-mcp-initial",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
         () => {
           expect(agent.mcp).not.toBeNull();
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
     });
   });
@@ -113,7 +112,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-client",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
@@ -121,7 +120,7 @@ describe("createAgent", () => {
       const newState = {
         count: 123,
         items: ["svelte-test"],
-        lastUpdated: Date.now()
+        lastUpdated: Date.now(),
       };
       agent.setState(newState);
 
@@ -140,7 +139,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-server",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
@@ -149,10 +148,10 @@ describe("createAgent", () => {
           expect(agent.lastStateUpdate?.state).toEqual({
             count: 0,
             items: [],
-            lastUpdated: null
+            lastUpdated: null,
           });
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
     });
 
@@ -167,7 +166,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-initial",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
@@ -176,7 +175,7 @@ describe("createAgent", () => {
           expect(agent.state?.count).toBe(0);
           expect(agent.state?.items).toEqual([]);
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
     });
 
@@ -191,7 +190,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-prop-client",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
@@ -199,7 +198,7 @@ describe("createAgent", () => {
           expect(agent.identity.identified).toBe(true);
           expect(agent.state).not.toBeUndefined();
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
 
       const newState = { count: 42, items: ["test"], lastUpdated: 1000 };
@@ -221,7 +220,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-prop-server",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
@@ -229,13 +228,13 @@ describe("createAgent", () => {
           expect(agent.identity.identified).toBe(true);
           expect(agent.state).not.toBeUndefined();
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
 
       const newState = {
         count: 999,
         items: ["server-state"],
-        lastUpdated: 2000
+        lastUpdated: 2000,
       };
       agent.setState(newState);
 
@@ -243,7 +242,7 @@ describe("createAgent", () => {
         () => {
           expect(agent.state?.count).toBe(999);
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     });
 
@@ -255,7 +254,7 @@ describe("createAgent", () => {
         name: "svelte-test-readonly-error",
         host,
         protocol,
-        query: { readonly: "true" }
+        query: { readonly: "true" },
       });
 
       await waitForIdentified(agent);
@@ -265,7 +264,7 @@ describe("createAgent", () => {
         () => {
           expect(agent.stateError).toBeTruthy();
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     });
 
@@ -280,7 +279,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-sequential",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
@@ -288,7 +287,7 @@ describe("createAgent", () => {
           expect(agent.identity.identified).toBe(true);
           expect(agent.state).not.toBeUndefined();
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
 
       agent.setState({ count: 1, items: ["first"], lastUpdated: 1 });
@@ -296,7 +295,7 @@ describe("createAgent", () => {
         () => {
           expect(agent.state?.count).toBe(1);
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
 
       agent.setState({ count: 2, items: ["second"], lastUpdated: 2 });
@@ -305,7 +304,7 @@ describe("createAgent", () => {
           expect(agent.state?.count).toBe(2);
           expect(agent.state?.items).toEqual(["second"]);
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     });
 
@@ -320,7 +319,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-spread",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
@@ -328,7 +327,7 @@ describe("createAgent", () => {
           expect(agent.identity.identified).toBe(true);
           expect(agent.state).not.toBeUndefined();
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
 
       agent.setState({ count: 10, items: ["a", "b"], lastUpdated: 100 });
@@ -338,7 +337,7 @@ describe("createAgent", () => {
           expect(agent.state?.count).toBe(10);
           expect(agent.state?.items).toEqual(["a", "b"]);
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
 
       agent.setState({ ...agent.state!, count: 20 });
@@ -349,7 +348,7 @@ describe("createAgent", () => {
           expect(agent.state?.items).toEqual(["a", "b"]);
           expect(agent.state?.lastUpdated).toBe(100);
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     });
 
@@ -364,7 +363,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         name: "svelte-test-state-both",
         host,
-        protocol
+        protocol,
       });
 
       await vi.waitFor(
@@ -372,7 +371,7 @@ describe("createAgent", () => {
           expect(agent.identity.identified).toBe(true);
           expect(agent.state).not.toBeUndefined();
         },
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
 
       const newState = { count: 77, items: ["both"], lastUpdated: 7 };
@@ -385,7 +384,7 @@ describe("createAgent", () => {
         () => {
           expect(agent.state?.count).toBe(77);
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     });
   });
@@ -398,7 +397,7 @@ describe("createAgent", () => {
         agent: "TestCallableAgent",
         name: "svelte-test-rpc-call",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
@@ -414,7 +413,7 @@ describe("createAgent", () => {
         agent: "TestCallableAgent",
         name: "svelte-test-rpc-stub",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
@@ -434,7 +433,7 @@ describe("createAgent", () => {
         agent: "TestCallableAgent",
         name: "svelte-test-rpc-error",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
@@ -452,14 +451,14 @@ describe("createAgent", () => {
         agent: "TestCallableAgent",
         name: "svelte-test-rpc-stream",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);
 
       const result = await agent.call<number>("streamNumbers", [5], {
         onChunk,
-        onDone
+        onDone,
       });
 
       expect(onChunk.mock.calls.length).toBeGreaterThan(0);
@@ -477,7 +476,7 @@ describe("createAgent", () => {
         name: "svelte-test-query",
         host,
         protocol,
-        query: { foo: "bar", baz: "qux" }
+        query: { foo: "bar", baz: "qux" },
       });
 
       await waitForIdentified(agent);
@@ -496,7 +495,7 @@ describe("createAgent", () => {
         name: instanceName,
         host,
         protocol,
-        basePath: `custom-state/${instanceName}`
+        basePath: `custom-state/${instanceName}`,
       });
 
       await waitForIdentified(agent);
@@ -513,7 +512,7 @@ describe("createAgent", () => {
         agent: "TestStateAgent",
         host,
         protocol,
-        basePath: "user"
+        basePath: "user",
       });
 
       await waitForIdentified(agent);
@@ -532,7 +531,7 @@ describe("createAgent", () => {
         agent: "TestCallableAgent",
         name: "svelte-test-stub-internal",
         host,
-        protocol
+        protocol,
       });
 
       await waitForIdentified(agent);

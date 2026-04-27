@@ -1,14 +1,9 @@
-import type {
-  VoiceAgent,
-  VoiceInput,
-  VoiceInputOptions,
-  VoiceTransport
-} from "../voice.svelte.ts";
+import type { VoiceAgent, VoiceInput, VoiceInputOptions, VoiceTransport } from "../voice.svelte.ts";
 
 declare const transport: VoiceTransport;
 const voiceInputOptions: VoiceInputOptions = {
   agent: "voice-input-agent",
-  transport
+  transport,
 };
 void voiceInputOptions;
 

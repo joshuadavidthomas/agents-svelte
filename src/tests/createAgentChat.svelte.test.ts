@@ -10,7 +10,7 @@ import {
   dispatchWeatherApprovalContinuationStart,
   expectedWeatherApprovalFinalParts,
   weatherApprovalFlow,
-  weatherApprovalInitialMessages
+  weatherApprovalInitialMessages,
 } from "./human-loop-flow.ts";
 
 const cleanups: Array<() => void> = [];
@@ -25,22 +25,16 @@ afterEach(() => {
   }
 });
 
-async function waitForChatInitialized(
-  chat: { initialized: boolean },
-  timeout = 2000
-) {
+async function waitForChatInitialized(chat: { initialized: boolean }, timeout = 2000) {
   await vi.waitFor(
     () => {
       expect(chat.initialized).toBe(true);
     },
-    { timeout }
+    { timeout },
   );
 }
 
-function findSent(
-  mock: MockAgent,
-  type: string
-): Record<string, unknown> | undefined {
+function findSent(mock: MockAgent, type: string): Record<string, unknown> | undefined {
   return mock.sentMessages.find((m) => m.type === type);
 }
 
@@ -50,14 +44,15 @@ function findSentAll(mock: MockAgent, type: string): Record<string, unknown>[] {
 
 function makeChat<M extends UIMessage = UIMessage>(
   mock: MockAgent,
-  overrides: Partial<CreateAgentChatOptions<M>> = {}
+  overrides: Partial<CreateAgentChatOptions<M>> = {},
 ): AgentChat<M> {
   const chat = new AgentChat<M>({
     agent: mock.agent,
     getInitialMessages: null,
     resume: false,
-    ...overrides
+    ...overrides,
   });
+  chat.connect();
   cleanups.push(() => chat.close());
   return chat;
 }
@@ -71,9 +66,9 @@ function seedToolPart(toolCallId: string, toolName: string): UIMessage {
         type: `tool-${toolName}`,
         toolCallId,
         state: "input-available",
-        input: {}
-      } as unknown as UIMessage["parts"][number]
-    ]
+        input: {},
+      } as unknown as UIMessage["parts"][number],
+    ],
   };
 }
 
@@ -84,8 +79,9 @@ describe("createAgentChat — initial messages", () => {
       agent: mock.agent,
       getInitialMessages: null,
       resume: false,
-      initialMessages: [seedToolPart("direct-call", "foo")]
+      initialMessages: [seedToolPart("direct-call", "foo")],
     });
+    chat.connect();
     cleanups.push(() => chat.close());
 
     await waitForChatInitialized(chat);
@@ -100,19 +96,18 @@ describe("createAgentChat — initial messages", () => {
       () =>
         new Promise<UIMessage[]>((resolve) => {
           resolveMessages = resolve;
-        })
+        }),
     );
     const chat = new AgentChat({
       agent: mock.agent,
       getInitialMessages,
-      resume: false
+      resume: false,
     });
+    chat.connect();
     cleanups.push(() => chat.close());
 
     chat.close();
-    resolveMessages([
-      { id: "late", role: "assistant", parts: [{ type: "text", text: "late" }] }
-    ]);
+    resolveMessages([{ id: "late", role: "assistant", parts: [{ type: "text", text: "late" }] }]);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(chat.initialized).toBe(false);
@@ -125,11 +120,11 @@ describe("createAgentChat — initial messages", () => {
       {
         id: "m1",
         role: "user",
-        parts: [{ type: "text", text: "hi" }]
-      }
+        parts: [{ type: "text", text: "hi" }],
+      },
     ];
     const chat = makeChat(mock, {
-      initialMessages: messages
+      initialMessages: messages,
     });
     await waitForChatInitialized(chat);
     expect(chat.messages).toEqual(messages);
@@ -141,12 +136,10 @@ describe("createAgentChat — initial messages", () => {
       {
         id: "m1",
         role: "assistant",
-        parts: [{ type: "text", text: "hello" }]
-      }
+        parts: [{ type: "text", text: "hello" }],
+      },
     ];
-    const fetcher = vi.fn(
-      async (_opts: { agent: string; name: string; url: string }) => messages
-    );
+    const fetcher = vi.fn(async (_opts: { agent: string; name: string; url: string }) => messages);
 
     const chat = makeChat(mock, { getInitialMessages: fetcher });
     await waitForChatInitialized(chat);
@@ -162,21 +155,21 @@ describe("createAgentChat — initial messages", () => {
     const name = `default-fetch-${Date.now()}-${Math.random()}`;
     const mock = createMockAgent({
       name,
-      url: `ws://localhost:3000/agents/chat/${name}?_pk=test`
+      url: `ws://localhost:3000/agents/chat/${name}?_pk=test`,
     });
     const messages: UIMessage[] = [
       {
         id: "m1",
         role: "assistant",
-        parts: [{ type: "text", text: "from fetch" }]
-      }
+        parts: [{ type: "text", text: "from fetch" }],
+      },
     ];
 
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify(messages), {
         status: 200,
-        headers: { "content-type": "application/json" }
-      })
+        headers: { "content-type": "application/json" },
+      }),
     );
 
     try {
@@ -185,7 +178,7 @@ describe("createAgentChat — initial messages", () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls[0]?.[0]).toBe(
-        `http://localhost:3000/agents/chat/${name}/get-messages`
+        `http://localhost:3000/agents/chat/${name}/get-messages`,
       );
       expect(chat.messages).toEqual(messages);
       expect(chat.initialLoadError).toBeNull();
@@ -201,19 +194,19 @@ describe("createAgentChat — initial messages", () => {
       getInitialMessages: () =>
         new Promise<UIMessage[]>((resolve) => {
           resolveMessages = resolve;
-        })
+        }),
     });
 
     const pushed: UIMessage[] = [
       {
         id: "pushed",
         role: "assistant",
-        parts: [{ type: "text", text: "pushed" }]
-      }
+        parts: [{ type: "text", text: "pushed" }],
+      },
     ];
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_CHAT_MESSAGES,
-      messages: pushed
+      messages: pushed,
     });
     flushSync();
 
@@ -221,8 +214,8 @@ describe("createAgentChat — initial messages", () => {
       {
         id: "stale",
         role: "assistant",
-        parts: [{ type: "text", text: "stale" }]
-      }
+        parts: [{ type: "text", text: "stale" }],
+      },
     ]);
     await waitForChatInitialized(chat);
 
@@ -234,7 +227,7 @@ describe("createAgentChat — initial messages", () => {
     const chat = makeChat(mock, {
       getInitialMessages: async () => {
         throw new Error("boom");
-      }
+      },
     });
 
     await waitForChatInitialized(chat);
@@ -254,8 +247,8 @@ describe("createAgentChat — setMessages", () => {
       {
         id: "x",
         role: "user",
-        parts: [{ type: "text", text: "hi" }]
-      }
+        parts: [{ type: "text", text: "hi" }],
+      },
     ];
     chat.setMessages(next);
     flushSync();
@@ -269,15 +262,13 @@ describe("createAgentChat — setMessages", () => {
   it("accepts a functional updater", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [
-        { id: "a", role: "user", parts: [{ type: "text", text: "a" }] }
-      ]
+      initialMessages: [{ id: "a", role: "user", parts: [{ type: "text", text: "a" }] }],
     });
     await waitForChatInitialized(chat);
 
     chat.setMessages((prev) => [
       ...prev,
-      { id: "b", role: "user", parts: [{ type: "text", text: "b" }] }
+      { id: "b", role: "user", parts: [{ type: "text", text: "b" }] },
     ]);
     flushSync();
 
@@ -289,10 +280,9 @@ describe("createAgentChat — setMessages", () => {
     const chat = makeChat(mock);
     await waitForChatInitialized(chat);
 
-    chat.setMessages(
-      [{ id: "z", role: "user", parts: [{ type: "text", text: "z" }] }],
-      { skipServerSync: true }
-    );
+    chat.setMessages([{ id: "z", role: "user", parts: [{ type: "text", text: "z" }] }], {
+      skipServerSync: true,
+    });
     flushSync();
 
     expect(findSent(mock, MessageType.CF_AGENT_CHAT_MESSAGES)).toBeUndefined();
@@ -303,9 +293,7 @@ describe("createAgentChat — clearHistory", () => {
   it("wipes local messages and sends CF_AGENT_CHAT_CLEAR", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [
-        { id: "a", role: "user", parts: [{ type: "text", text: "a" }] }
-      ]
+      initialMessages: [{ id: "a", role: "user", parts: [{ type: "text", text: "a" }] }],
     });
     await waitForChatInitialized(chat);
 
@@ -322,13 +310,13 @@ describe("createAgentChat — clearHistory", () => {
     await waitForChatInitialized(chat);
 
     mock.dispatchServerMessage({
-      type: MessageType.CF_AGENT_STREAM_RESUME_NONE
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
     });
     flushSync();
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "stream-clear"
+      id: "stream-clear",
     });
     flushSync();
     expect(chat.isServerStreaming).toBe(true);
@@ -349,9 +337,7 @@ describe("createAgentChat — clearHistory", () => {
 
     let requestId = "";
     await vi.waitFor(() => {
-      requestId = String(
-        findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? ""
-      );
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
       expect(requestId).not.toBe("");
     });
 
@@ -363,19 +349,19 @@ describe("createAgentChat — clearHistory", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: '{"type":"start","messageId":"late-assistant"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: '{"type":"text-start","id":"late-text"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: '{"type":"text-delta","id":"late-text","delta":"late"}',
-      done: false
+      done: false,
     });
     flushSync();
 
@@ -390,38 +376,34 @@ describe("createAgentChat — clearHistory", () => {
     await waitForChatInitialized(chat);
 
     await vi.waitFor(() => {
-      expect(
-        findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)
-      ).toBeDefined();
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
     });
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "resume-clear"
+      id: "resume-clear",
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-clear",
       body: '{"type":"start","messageId":"resume-assistant"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-clear",
       body: '{"type":"text-start","id":"resume-text"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-clear",
       body: '{"type":"text-delta","id":"resume-text","delta":"before"}',
-      done: false
+      done: false,
     });
 
     await vi.waitFor(() => {
-      expect(
-        chat.messages.some((message) => message.id === "resume-assistant")
-      ).toBe(true);
+      expect(chat.messages.some((message) => message.id === "resume-assistant")).toBe(true);
     });
 
     chat.clearHistory();
@@ -432,13 +414,13 @@ describe("createAgentChat — clearHistory", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-clear",
       body: '{"type":"text-delta","id":"resume-text","delta":" after"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-clear",
       body: "",
-      done: true
+      done: true,
     });
     flushSync();
 
@@ -452,7 +434,7 @@ describe("createAgentChat — tool output wire protocol", () => {
   it("toolCall.addOutput sends CF_AGENT_TOOL_RESULT and updates the local part", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-1", "getWeather")]
+      initialMessages: [seedToolPart("call-1", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -466,7 +448,7 @@ describe("createAgentChat — tool output wire protocol", () => {
       toolCallId: "call-1",
       toolName: "getWeather",
       output: { temp: 72 },
-      autoContinue: true
+      autoContinue: true,
     });
 
     const toolPart = chat.messages[0]?.parts[0] as {
@@ -480,7 +462,7 @@ describe("createAgentChat — tool output wire protocol", () => {
   it("toolCall.addOutput with state=output-error disables autoContinue", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-2", "getWeather")]
+      initialMessages: [seedToolPart("call-2", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -495,7 +477,7 @@ describe("createAgentChat — tool output wire protocol", () => {
       toolName: "getWeather",
       state: "output-error",
       errorText: "failed",
-      autoContinue: false
+      autoContinue: false,
     });
 
     const toolPart = chat.messages[0]?.parts[0] as {
@@ -510,7 +492,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
       autoContinueAfterToolResult: false,
-      initialMessages: [seedToolPart("call-3", "foo")]
+      initialMessages: [seedToolPart("call-3", "foo")],
     });
     await waitForChatInitialized(chat);
 
@@ -528,18 +510,14 @@ describe("createAgentChat — tool output wire protocol", () => {
     const chat = makeChat(mock);
     await waitForChatInitialized(chat);
 
-    expect(
-      (chat as unknown as { addToolOutput?: unknown }).addToolOutput
-    ).toBeUndefined();
-    expect(
-      (chat as unknown as { addToolResult?: unknown }).addToolResult
-    ).toBeUndefined();
+    expect((chat as unknown as { addToolOutput?: unknown }).addToolOutput).toBeUndefined();
+    expect((chat as unknown as { addToolResult?: unknown }).addToolResult).toBeUndefined();
   });
 
   it("toolCall.addOutput no-ops after close", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-closed", "getWeather")]
+      initialMessages: [seedToolPart("call-closed", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -555,35 +533,31 @@ describe("createAgentChat — tool output wire protocol", () => {
   it("stop aborts an attached tool continuation", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-abort", "getWeather")]
+      initialMessages: [seedToolPart("call-abort", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
     chat.pendingToolCalls[0]!.addOutput({ output: { temp: 72 } });
 
     await vi.waitFor(() => {
-      expect(
-        findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)
-      ).toBeDefined();
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
     });
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "continuation-abort"
+      id: "continuation-abort",
     });
     await chat.stop();
 
-    expect(
-      findSent(mock, MessageType.CF_AGENT_CHAT_REQUEST_CANCEL)
-    ).toMatchObject({
-      id: "continuation-abort"
+    expect(findSent(mock, MessageType.CF_AGENT_CHAT_REQUEST_CANCEL)).toMatchObject({
+      id: "continuation-abort",
     });
   });
 
   it("toolCall.addOutput updates a retained historical handle", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-history", "getWeather")]
+      initialMessages: [seedToolPart("call-history", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -595,8 +569,8 @@ describe("createAgentChat — tool output wire protocol", () => {
       {
         id: "later-user",
         role: "user",
-        parts: [{ type: "text", text: "later" }]
-      }
+        parts: [{ type: "text", text: "later" }],
+      },
     ];
     flushSync();
     expect(chat.pendingToolCalls).toEqual([]);
@@ -615,7 +589,7 @@ describe("createAgentChat — tool output wire protocol", () => {
   it("toolCall.addOutput is idempotent", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-once", "getWeather")]
+      initialMessages: [seedToolPart("call-once", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -635,7 +609,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     const sendAutomaticallyWhen = vi.fn(() => true);
     const chat = makeChat(mock, {
       sendAutomaticallyWhen,
-      initialMessages: [seedToolPart("call-auto-server", "foo")]
+      initialMessages: [seedToolPart("call-auto-server", "foo")],
     });
     await waitForChatInitialized(chat);
 
@@ -644,9 +618,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(sendAutomaticallyWhen).not.toHaveBeenCalled();
-    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual(
-      []
-    );
+    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual([]);
   });
 
   it("sendAutomaticallyWhen can continue from the client when server auto-continuation is disabled", async () => {
@@ -655,7 +627,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     const chat = makeChat(mock, {
       autoContinueAfterToolResult: false,
       sendAutomaticallyWhen,
-      initialMessages: [seedToolPart("call-auto-client", "foo")]
+      initialMessages: [seedToolPart("call-auto-client", "foo")],
     });
     await waitForChatInitialized(chat);
 
@@ -663,9 +635,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     flushSync();
 
     await vi.waitFor(() => {
-      expect(
-        findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)
-      ).toHaveLength(1);
+      expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toHaveLength(1);
     });
   });
 
@@ -675,7 +645,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     const chat = makeChat(mock, {
       autoContinueAfterToolResult: false,
       sendAutomaticallyWhen,
-      initialMessages: [seedToolPart("call-no-client", "foo")]
+      initialMessages: [seedToolPart("call-no-client", "foo")],
     });
     await waitForChatInitialized(chat);
 
@@ -683,9 +653,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     flushSync();
     await vi.waitFor(() => expect(sendAutomaticallyWhen).toHaveBeenCalled());
 
-    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual(
-      []
-    );
+    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual([]);
   });
 
   it("sends at most one client continuation after multiple tool outputs", async () => {
@@ -707,17 +675,17 @@ describe("createAgentChat — tool output wire protocol", () => {
               type: "tool-foo",
               toolCallId: "call-a",
               state: "input-available",
-              input: {}
+              input: {},
             } as unknown as UIMessage["parts"][number],
             {
               type: "tool-bar",
               toolCallId: "call-b",
               state: "input-available",
-              input: {}
-            } as unknown as UIMessage["parts"][number]
-          ]
-        }
-      ]
+              input: {},
+            } as unknown as UIMessage["parts"][number],
+          ],
+        },
+      ],
     });
     await waitForChatInitialized(chat);
 
@@ -731,9 +699,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     flushSync();
 
     await vi.waitFor(() => {
-      expect(
-        findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)
-      ).toHaveLength(1);
+      expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toHaveLength(1);
     });
   });
 });
@@ -751,11 +717,11 @@ describe("createAgentChat — approval wire protocol", () => {
               type: "tool-delete-file",
               toolCallId: "call-9",
               state: "approval-requested",
-              approval: { id: "appr-1" }
-            } as unknown as UIMessage["parts"][number]
-          ]
-        }
-      ]
+              approval: { id: "appr-1" },
+            } as unknown as UIMessage["parts"][number],
+          ],
+        },
+      ],
     });
     await waitForChatInitialized(chat);
 
@@ -766,7 +732,7 @@ describe("createAgentChat — approval wire protocol", () => {
     expect(sent).toMatchObject({
       toolCallId: "call-9",
       approved: true,
-      autoContinue: true
+      autoContinue: true,
     });
   });
 
@@ -784,11 +750,11 @@ describe("createAgentChat — approval wire protocol", () => {
               type: "tool-delete-file",
               toolCallId: "call-approval-server-auto",
               state: "approval-requested",
-              approval: { id: "appr-server-auto" }
-            } as unknown as UIMessage["parts"][number]
-          ]
-        }
-      ]
+              approval: { id: "appr-server-auto" },
+            } as unknown as UIMessage["parts"][number],
+          ],
+        },
+      ],
     });
     await waitForChatInitialized(chat);
 
@@ -797,9 +763,7 @@ describe("createAgentChat — approval wire protocol", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(sendAutomaticallyWhen).not.toHaveBeenCalled();
-    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual(
-      []
-    );
+    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual([]);
   });
 
   it("sendAutomaticallyWhen can continue from approval when server auto-continuation is disabled", async () => {
@@ -817,11 +781,11 @@ describe("createAgentChat — approval wire protocol", () => {
               type: "tool-delete-file",
               toolCallId: "call-approval-auto",
               state: "approval-requested",
-              approval: { id: "appr-auto" }
-            } as unknown as UIMessage["parts"][number]
-          ]
-        }
-      ]
+              approval: { id: "appr-auto" },
+            } as unknown as UIMessage["parts"][number],
+          ],
+        },
+      ],
     });
     await waitForChatInitialized(chat);
 
@@ -830,9 +794,7 @@ describe("createAgentChat — approval wire protocol", () => {
 
     await vi.waitFor(() => {
       expect(sendAutomaticallyWhen).toHaveBeenCalled();
-      expect(
-        findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)
-      ).toHaveLength(1);
+      expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toHaveLength(1);
     });
   });
 
@@ -848,11 +810,11 @@ describe("createAgentChat — approval wire protocol", () => {
               type: "tool-delete-file",
               toolCallId: "call-approval-history",
               state: "approval-requested",
-              approval: { id: "appr-history" }
-            } as unknown as UIMessage["parts"][number]
-          ]
-        }
-      ]
+              approval: { id: "appr-history" },
+            } as unknown as UIMessage["parts"][number],
+          ],
+        },
+      ],
     });
     await waitForChatInitialized(chat);
 
@@ -861,17 +823,15 @@ describe("createAgentChat — approval wire protocol", () => {
       {
         id: "later-user",
         role: "user",
-        parts: [{ type: "text", text: "later" }]
-      }
+        parts: [{ type: "text", text: "later" }],
+      },
     ];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     chat.addToolApprovalResponse({ id: "appr-history", approved: true });
     chat.addToolApprovalResponse({ id: "appr-history", approved: true });
     flushSync();
 
-    expect(findSentAll(mock, MessageType.CF_AGENT_TOOL_APPROVAL)).toHaveLength(
-      1
-    );
+    expect(findSentAll(mock, MessageType.CF_AGENT_TOOL_APPROVAL)).toHaveLength(1);
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
 
@@ -888,7 +848,7 @@ describe("createAgentChat — approval wire protocol", () => {
     const sendAutomaticallyWhen = vi.fn(() => true);
     const chat = makeChat(mock, {
       autoContinueAfterToolResult: false,
-      sendAutomaticallyWhen
+      sendAutomaticallyWhen,
     });
     await waitForChatInitialized(chat);
 
@@ -899,9 +859,7 @@ describe("createAgentChat — approval wire protocol", () => {
 
     expect(warn).toHaveBeenCalled();
     expect(sendAutomaticallyWhen).not.toHaveBeenCalled();
-    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual(
-      []
-    );
+    expect(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toEqual([]);
     warn.mockRestore();
   });
 
@@ -925,9 +883,7 @@ describe("createAgentChat — server-initiated messages", () => {
   it("CF_AGENT_CHAT_CLEAR wipes local state", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [
-        { id: "a", role: "user", parts: [{ type: "text", text: "a" }] }
-      ]
+      initialMessages: [{ id: "a", role: "user", parts: [{ type: "text", text: "a" }] }],
     });
     await waitForChatInitialized(chat);
 
@@ -946,12 +902,12 @@ describe("createAgentChat — server-initiated messages", () => {
       {
         id: "server-msg",
         role: "assistant",
-        parts: [{ type: "text", text: "from server" }]
-      }
+        parts: [{ type: "text", text: "from server" }],
+      },
     ];
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_CHAT_MESSAGES,
-      messages: next
+      messages: next,
     });
     flushSync();
 
@@ -965,9 +921,9 @@ describe("createAgentChat — server-initiated messages", () => {
         {
           id: "message-updated",
           role: "assistant",
-          parts: [{ type: "text", text: "old" }]
-        }
-      ]
+          parts: [{ type: "text", text: "old" }],
+        },
+      ],
     });
     await waitForChatInitialized(chat);
 
@@ -976,8 +932,8 @@ describe("createAgentChat — server-initiated messages", () => {
       message: {
         id: "message-updated",
         role: "assistant",
-        parts: [{ type: "text", text: "new" }]
-      }
+        parts: [{ type: "text", text: "new" }],
+      },
     });
     flushSync();
 
@@ -985,15 +941,15 @@ describe("createAgentChat — server-initiated messages", () => {
       {
         id: "message-updated",
         role: "assistant",
-        parts: [{ type: "text", text: "new" }]
-      }
+        parts: [{ type: "text", text: "new" }],
+      },
     ]);
   });
 
   it("CF_AGENT_MESSAGE_UPDATED can match an existing message by toolCallId", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-update", "getWeather")]
+      initialMessages: [seedToolPart("call-update", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -1007,16 +963,14 @@ describe("createAgentChat — server-initiated messages", () => {
             type: "tool-getWeather",
             toolCallId: "call-update",
             state: "output-available",
-            output: { temp: 72 }
-          }
-        ]
-      }
+            output: { temp: 72 },
+          },
+        ],
+      },
     });
     flushSync();
 
-    const updatedPart = chat.messages[0]?.parts[0] as
-      | { output?: unknown }
-      | undefined;
+    const updatedPart = chat.messages[0]?.parts[0] as { output?: unknown } | undefined;
     expect(chat.messages[0]?.id).toBe("asst-call-update");
     expect(updatedPart?.output).toEqual({ temp: 72 });
   });
@@ -1027,44 +981,40 @@ describe("createAgentChat — server-initiated messages", () => {
     await waitForChatInitialized(chat);
 
     await vi.waitFor(() => {
-      expect(
-        findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)
-      ).toBeDefined();
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
     });
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "resume-success"
+      id: "resume-success",
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-success",
       body: '{"type":"start","messageId":"resumed-assistant"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-success",
       body: '{"type":"text-start","id":"resumed-text"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "resume-success",
       body: '{"type":"text-delta","id":"resumed-text","delta":"resumed"}',
-      done: false
+      done: false,
     });
 
     await vi.waitFor(() => {
-      expect(chat.messages.map((message) => message.id)).toEqual([
-        "resumed-assistant"
-      ]);
+      expect(chat.messages.map((message) => message.id)).toEqual(["resumed-assistant"]);
     });
 
     expect(chat.isServerStreaming).toBe(false);
-    expect(
-      findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)
-    ).toMatchObject({ id: "resume-success" });
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toMatchObject({
+      id: "resume-success",
+    });
   });
 
   it("CF_AGENT_STREAM_RESUMING triggers fallback and ACK when no active resume", async () => {
@@ -1075,7 +1025,7 @@ describe("createAgentChat — server-initiated messages", () => {
     // Resolve the transport's initial resumeStream() so it's no longer
     // awaiting — then STREAM_RESUMING hits our fallback path.
     mock.dispatchServerMessage({
-      type: MessageType.CF_AGENT_STREAM_RESUME_NONE
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
     });
     flushSync();
     mock.sent.length = 0;
@@ -1083,7 +1033,7 @@ describe("createAgentChat — server-initiated messages", () => {
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "stream-abc"
+      id: "stream-abc",
     });
     flushSync();
 
@@ -1099,14 +1049,12 @@ describe("createAgentChat — server-initiated messages", () => {
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "ignored-resume"
+      id: "ignored-resume",
     });
     flushSync();
 
     expect(chat.isServerStreaming).toBe(false);
-    expect(
-      findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)
-    ).toBeUndefined();
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toBeUndefined();
   });
 });
 
@@ -1125,10 +1073,10 @@ describe("createAgentChat — pendingToolCalls", () => {
             type: "tool-getWeather",
             toolCallId: "call-1",
             state: "input-available",
-            input: { city: "SF" }
-          } as unknown as UIMessage["parts"][number]
-        ]
-      }
+            input: { city: "SF" },
+          } as unknown as UIMessage["parts"][number],
+        ],
+      },
     ];
     flushSync();
 
@@ -1152,8 +1100,8 @@ describe("createAgentChat — pendingToolCalls", () => {
       {
         id: "asst-1",
         role: "assistant",
-        parts: [{ type: "text", text: "waiting" }]
-      }
+        parts: [{ type: "text", text: "waiting" }],
+      },
     ];
     flushSync();
     expect(chat.pendingToolCalls).toEqual([]);
@@ -1167,10 +1115,10 @@ describe("createAgentChat — pendingToolCalls", () => {
             type: "tool-foo",
             toolCallId: "call-replaced",
             state: "input-available",
-            input: { x: 1 }
-          } as unknown as UIMessage["parts"][number]
-        ]
-      }
+            input: { x: 1 },
+          } as unknown as UIMessage["parts"][number],
+        ],
+      },
     ];
     flushSync();
 
@@ -1194,38 +1142,37 @@ describe("createAgentChat — pendingToolCalls", () => {
             type: "tool-foo",
             toolCallId: "call-a",
             state: "input-available",
-            input: { a: 1 }
+            input: { a: 1 },
           } as unknown as UIMessage["parts"][number],
           {
             type: "tool-bar",
             toolCallId: "call-b",
             state: "input-available",
-            input: { b: 2 }
-          } as unknown as UIMessage["parts"][number]
-        ]
-      }
+            input: { b: 2 },
+          } as unknown as UIMessage["parts"][number],
+        ],
+      },
     ];
     flushSync();
 
     await vi.waitFor(() => {
-      expect(
-        chat.pendingToolCalls.map((toolCall) => toolCall.toolCallId)
-      ).toEqual(["call-a", "call-b"]);
+      expect(chat.pendingToolCalls.map((toolCall) => toolCall.toolCallId)).toEqual([
+        "call-a",
+        "call-b",
+      ]);
     });
 
     chat.pendingToolCalls[0]?.addOutput({ output: { ok: "a" } });
     flushSync();
 
-    expect(
-      chat.pendingToolCalls.map((toolCall) => toolCall.toolCallId)
-    ).toEqual(["call-b"]);
+    expect(chat.pendingToolCalls.map((toolCall) => toolCall.toolCallId)).toEqual(["call-b"]);
     expect(findSentAll(mock, MessageType.CF_AGENT_TOOL_RESULT)).toHaveLength(1);
   });
 
   it("clears pending tool calls when history is cleared", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-clear", "foo")]
+      initialMessages: [seedToolPart("call-clear", "foo")],
     });
     await waitForChatInitialized(chat);
 
@@ -1245,7 +1192,7 @@ describe("createAgentChat — pendingToolCalls", () => {
       type: "tool-foo",
       toolCallId: "call-xyz",
       state: "input-available",
-      input: {}
+      input: {},
     } as unknown as UIMessage["parts"][number];
 
     chat.messages = [{ id: "asst-1", role: "assistant", parts: [toolPart] }];
@@ -1254,10 +1201,7 @@ describe("createAgentChat — pendingToolCalls", () => {
       expect(chat.pendingToolCalls).toHaveLength(1);
     });
 
-    chat.messages = [
-      ...chat.messages,
-      { id: "asst-2", role: "assistant", parts: [toolPart] }
-    ];
+    chat.messages = [...chat.messages, { id: "asst-2", role: "assistant", parts: [toolPart] }];
     flushSync();
 
     await new Promise((r) => setTimeout(r, 100));
@@ -1268,7 +1212,7 @@ describe("createAgentChat — pendingToolCalls", () => {
   it("toolCall.run sends output, updates local state, and only runs once", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-run", "getWeather")]
+      initialMessages: [seedToolPart("call-run", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -1285,7 +1229,7 @@ describe("createAgentChat — pendingToolCalls", () => {
       toolCallId: "call-run",
       toolName: "getWeather",
       output: { temp: 72 },
-      autoContinue: true
+      autoContinue: true,
     });
 
     const toolPart = chat.messages[0]?.parts[0] as {
@@ -1300,7 +1244,7 @@ describe("createAgentChat — pendingToolCalls", () => {
   it("toolCall.run no-ops after manual addOutput", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-manual-first", "getWeather")]
+      initialMessages: [seedToolPart("call-manual-first", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -1319,7 +1263,7 @@ describe("createAgentChat — pendingToolCalls", () => {
   it("toolCall.run turns thrown errors into output-error results", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-error", "getWeather")]
+      initialMessages: [seedToolPart("call-error", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
@@ -1342,7 +1286,7 @@ describe("createAgentChat — pendingToolCalls", () => {
       toolName: "getWeather",
       state: "output-error",
       errorText: "permission denied",
-      autoContinue: false
+      autoContinue: false,
     });
   });
 
@@ -1360,10 +1304,10 @@ describe("createAgentChat — pendingToolCalls", () => {
             type: "tool-getWeather",
             toolCallId: "call-snapshot",
             state: "input-available",
-            input: { city: "SF" }
-          } as unknown as UIMessage["parts"][number]
-        ]
-      }
+            input: { city: "SF" },
+          } as unknown as UIMessage["parts"][number],
+        ],
+      },
     ];
     flushSync();
 
@@ -1380,10 +1324,10 @@ describe("createAgentChat — pendingToolCalls", () => {
             type: "tool-getWeather",
             toolCallId: "call-snapshot",
             state: "input-available",
-            input: { city: "NYC" }
-          } as unknown as UIMessage["parts"][number]
-        ]
-      }
+            input: { city: "NYC" },
+          } as unknown as UIMessage["parts"][number],
+        ],
+      },
     ];
     flushSync();
 
@@ -1403,9 +1347,7 @@ describe("createAgentChat — stream errors", () => {
 
     let requestId = "";
     await vi.waitFor(() => {
-      requestId = String(
-        findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? ""
-      );
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
       expect(requestId).not.toBe("");
     });
 
@@ -1414,7 +1356,7 @@ describe("createAgentChat — stream errors", () => {
       id: requestId,
       body: "boom",
       error: true,
-      done: true
+      done: true,
     });
 
     await request;
@@ -1425,13 +1367,11 @@ describe("createAgentChat — stream errors", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: '{"type":"start","messageId":"late-after-error"}',
-      done: false
+      done: false,
     });
     flushSync();
 
-    expect(
-      chat.messages.some((message) => message.id === "late-after-error")
-    ).toBe(false);
+    expect(chat.messages.some((message) => message.id === "late-after-error")).toBe(false);
   });
 });
 
@@ -1449,13 +1389,13 @@ describe("createAgentChat — lifetime cleanup", () => {
         {
           id: "late",
           role: "assistant",
-          parts: [{ type: "text", text: "late" }]
-        }
-      ]
+          parts: [{ type: "text", text: "late" }],
+        },
+      ],
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "late-stream"
+      id: "late-stream",
     });
     flushSync();
 
@@ -1467,43 +1407,39 @@ describe("createAgentChat — lifetime cleanup", () => {
   it("close ignores a later tool-continuation stream announcement", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
-      initialMessages: [seedToolPart("call-close-continuation", "getWeather")]
+      initialMessages: [seedToolPart("call-close-continuation", "getWeather")],
     });
     await waitForChatInitialized(chat);
 
     chat.pendingToolCalls[0]!.addOutput({ output: { temp: 72 } });
     await vi.waitFor(() => {
-      expect(
-        findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)
-      ).toBeDefined();
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
     });
 
     chat.close();
     const ackCountBeforeLateMessages = findSentAll(
       mock,
-      MessageType.CF_AGENT_STREAM_RESUME_ACK
+      MessageType.CF_AGENT_STREAM_RESUME_ACK,
     ).length;
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "late-continuation"
+      id: "late-continuation",
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "late-continuation",
       body: '{"type":"start","messageId":"late-continuation-assistant"}',
-      done: false
+      done: false,
     });
     flushSync();
 
-    expect(
-      findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)
-    ).toHaveLength(ackCountBeforeLateMessages);
-    expect(
-      chat.messages.some(
-        (message) => message.id === "late-continuation-assistant"
-      )
-    ).toBe(false);
+    expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toHaveLength(
+      ackCountBeforeLateMessages,
+    );
+    expect(chat.messages.some((message) => message.id === "late-continuation-assistant")).toBe(
+      false,
+    );
   });
 });
 
@@ -1517,9 +1453,7 @@ describe("createAgentChat — stream chunk repair", () => {
 
     let requestId = "";
     await vi.waitFor(() => {
-      requestId = String(
-        findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? ""
-      );
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
       expect(requestId).not.toBe("");
     });
 
@@ -1527,37 +1461,35 @@ describe("createAgentChat — stream chunk repair", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: '{"type":"start","messageId":"assistant-reasoning"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: '{"type":"reasoning-delta","id":"reason-1","delta":"Thinking"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: '{"type":"reasoning-end","id":"reason-1"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
       body: "",
-      done: true
+      done: true,
     });
 
     await vi.waitFor(() => {
-      const assistant = chat.messages.find(
-        (message) => message.id === "assistant-reasoning"
-      );
+      const assistant = chat.messages.find((message) => message.id === "assistant-reasoning");
       expect(assistant?.parts).toEqual([
         {
           type: "reasoning",
           text: "Thinking",
-          state: "done"
-        }
+          state: "done",
+        },
       ]);
     });
   });
@@ -1566,23 +1498,21 @@ describe("createAgentChat — stream chunk repair", () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
       resume: true,
-      initialMessages: weatherApprovalInitialMessages()
+      initialMessages: weatherApprovalInitialMessages(),
     });
     await waitForChatInitialized(chat);
 
     chat.addToolApprovalResponse({
       id: weatherApprovalFlow.approvalId,
-      approved: true
+      approved: true,
     });
     await vi.waitFor(() => {
       expect(findSent(mock, MessageType.CF_AGENT_TOOL_APPROVAL)).toMatchObject({
         toolCallId: weatherApprovalFlow.toolCallId,
         approved: true,
-        autoContinue: true
+        autoContinue: true,
       });
-      expect(
-        findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)
-      ).toBeDefined();
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
     });
 
     dispatchWeatherApprovalContinuationStart(mock);
@@ -1591,7 +1521,7 @@ describe("createAgentChat — stream chunk repair", () => {
 
     await vi.waitFor(() => {
       const assistant = chat.messages.find(
-        (message) => message.id === weatherApprovalFlow.assistantId
+        (message) => message.id === weatherApprovalFlow.assistantId,
       );
       expect(assistant?.parts).toEqual(expectedWeatherApprovalFinalParts());
     });
@@ -1605,7 +1535,7 @@ describe("createAgentChat — stream chunk repair", () => {
         {
           id: "user-1",
           role: "user",
-          parts: [{ type: "text", text: "weather in LA" }]
+          parts: [{ type: "text", text: "weather in LA" }],
         },
         {
           id: "assistant-approval",
@@ -1614,7 +1544,7 @@ describe("createAgentChat — stream chunk repair", () => {
             {
               type: "reasoning",
               text: "Initial reasoning",
-              state: "done"
+              state: "done",
             },
             {
               type: "tool-getWeatherInformation",
@@ -1622,60 +1552,56 @@ describe("createAgentChat — stream chunk repair", () => {
               state: "approval-responded",
               input: { city: "Los Angeles" },
               output: "The weather in Los Angeles is sunny, 72°F.",
-              approval: { id: "approval-weather", approved: true }
-            } as never
-          ]
-        }
-      ]
+              approval: { id: "approval-weather", approved: true },
+            } as never,
+          ],
+        },
+      ],
     });
     await waitForChatInitialized(chat);
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "approval-continuation"
+      id: "approval-continuation",
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "approval-continuation",
       body: '{"type":"reasoning-delta","id":"reason-2","delta":"Final reasoning"}',
       done: false,
-      continuation: true
+      continuation: true,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "approval-continuation",
       body: '{"type":"reasoning-end","id":"reason-2"}',
       done: false,
-      continuation: true
+      continuation: true,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "approval-continuation",
       body: '{"type":"text-delta","id":"text-2","delta":"Here is the approved weather."}',
       done: false,
-      continuation: true
+      continuation: true,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: "approval-continuation",
       body: "",
       done: true,
-      continuation: true
+      continuation: true,
     });
 
     await vi.waitFor(() => {
-      const assistant = chat.messages.find(
-        (message) => message.id === "assistant-approval"
-      );
-      expect(
-        assistant?.parts.filter((part) => part.type === "reasoning")
-      ).toEqual([
+      const assistant = chat.messages.find((message) => message.id === "assistant-approval");
+      expect(assistant?.parts.filter((part) => part.type === "reasoning")).toEqual([
         { type: "reasoning", text: "Initial reasoning", state: "done" },
-        { type: "reasoning", text: "Final reasoning", state: "done" }
+        { type: "reasoning", text: "Final reasoning", state: "done" },
       ]);
-      expect(
-        assistant?.parts.find((part) => part.type === "text")
-      ).toMatchObject({ text: "Here is the approved weather." });
+      expect(assistant?.parts.find((part) => part.type === "text")).toMatchObject({
+        text: "Here is the approved weather.",
+      });
     });
   });
 });
@@ -1689,13 +1615,13 @@ describe("createAgentChat — isStreaming flag", () => {
     expect(chat.isStreaming).toBe(false);
 
     mock.dispatchServerMessage({
-      type: MessageType.CF_AGENT_STREAM_RESUME_NONE
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
     });
     flushSync();
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_STREAM_RESUMING,
-      id: "stream-1"
+      id: "stream-1",
     });
     flushSync();
 
@@ -1713,8 +1639,8 @@ describe("createAgentChat — overlapping submits parity", () => {
     const firstRequest = chat.sendMessage({ text: "First" });
     let requestIds: string[] = [];
     await vi.waitFor(() => {
-      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map(
-        (message) => String(message.id)
+      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map((message) =>
+        String(message.id),
       );
       expect(requestIds).toHaveLength(1);
     });
@@ -1724,45 +1650,39 @@ describe("createAgentChat — overlapping submits parity", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: '{"type":"start","messageId":"assistant-1"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: '{"type":"text-start","id":"text-1"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: '{"type":"text-delta","id":"text-1","delta":"Hello"}',
-      done: false
+      done: false,
     });
 
     await vi.waitFor(() => {
-      expect(
-        chat.messages.filter((message) => message.role === "assistant")
-      ).toHaveLength(1);
-      expect(chat.messages.map((message) => message.role).join(",")).toBe(
-        "user,assistant"
-      );
+      expect(chat.messages.filter((message) => message.role === "assistant")).toHaveLength(1);
+      expect(chat.messages.map((message) => message.role).join(",")).toBe("user,assistant");
     });
 
     const secondRequest = chat.sendMessage({ text: "Second" });
     await vi.waitFor(() => {
-      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map(
-        (message) => String(message.id)
+      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map((message) =>
+        String(message.id),
       );
       expect(requestIds).toHaveLength(2);
     });
 
     const secondRequestId = requestIds[1]!;
     const [firstUserMessage, secondUserMessage] = chat.messages.filter(
-      (message) => message.role === "user"
+      (message) => message.role === "user",
     );
-    const protectedAssistant = chat.messages.find(
-      (message) => message.id === "assistant-1"
-    );
+    const protectedAssistant = chat.messages.find((message) => message.id === "assistant-1");
 
     expect(firstUserMessage).toBeDefined();
     expect(secondUserMessage).toBeDefined();
@@ -1770,24 +1690,22 @@ describe("createAgentChat — overlapping submits parity", () => {
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_CHAT_MESSAGES,
-      messages: [firstUserMessage, protectedAssistant, secondUserMessage]
+      messages: [firstUserMessage, protectedAssistant, secondUserMessage],
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: '{"type":"text-delta","id":"text-1","delta":" there"}',
-      done: false
+      done: false,
     });
 
     await vi.waitFor(() => {
-      const assistantMessages = chat.messages.filter(
-        (message) => message.role === "assistant"
-      );
+      const assistantMessages = chat.messages.filter((message) => message.role === "assistant");
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0]?.id).toBe("assistant-1");
-      const textPart = assistantMessages[0]?.parts.find(
-        (part) => part.type === "text"
-      ) as { text?: string } | undefined;
+      const textPart = assistantMessages[0]?.parts.find((part) => part.type === "text") as
+        | { text?: string }
+        | undefined;
       expect(textPart?.text).toBe("Hello there");
     });
 
@@ -1795,48 +1713,44 @@ describe("createAgentChat — overlapping submits parity", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: "",
-      done: true
+      done: true,
     });
     await firstRequest;
 
     await vi.waitFor(() => {
-      expect(chat.messages.map((message) => message.role).join(",")).toBe(
-        "user,assistant,user"
-      );
+      expect(chat.messages.map((message) => message.role).join(",")).toBe("user,assistant,user");
     });
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: secondRequestId,
       body: '{"type":"start","messageId":"assistant-2"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: secondRequestId,
       body: '{"type":"text-start","id":"text-2"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: secondRequestId,
       body: '{"type":"text-delta","id":"text-2","delta":"Follow-up"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: secondRequestId,
       body: "",
-      done: true
+      done: true,
     });
     await secondRequest;
 
     await vi.waitFor(() => {
-      expect(
-        chat.messages.filter((message) => message.role === "assistant")
-      ).toHaveLength(2);
+      expect(chat.messages.filter((message) => message.role === "assistant")).toHaveLength(2);
       expect(chat.messages.map((message) => message.role).join(",")).toBe(
-        "user,assistant,user,assistant"
+        "user,assistant,user,assistant",
       );
     });
   });
@@ -1849,8 +1763,8 @@ describe("createAgentChat — overlapping submits parity", () => {
     void chat.sendMessage({ text: "First" });
     let requestIds: string[] = [];
     await vi.waitFor(() => {
-      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map(
-        (message) => String(message.id)
+      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map((message) =>
+        String(message.id),
       );
       expect(requestIds).toHaveLength(1);
     });
@@ -1860,31 +1774,29 @@ describe("createAgentChat — overlapping submits parity", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: '{"type":"start","messageId":"assistant-1"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: '{"type":"text-start","id":"text-1"}',
-      done: false
+      done: false,
     });
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: firstRequestId,
       body: '{"type":"text-delta","id":"text-1","delta":"Hello"}',
-      done: false
+      done: false,
     });
 
     await vi.waitFor(() => {
-      expect(
-        chat.messages.some((message) => message.id === "assistant-1")
-      ).toBe(true);
+      expect(chat.messages.some((message) => message.id === "assistant-1")).toBe(true);
     });
 
     void chat.sendMessage({ text: "Second" });
     await vi.waitFor(() => {
-      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map(
-        (message) => String(message.id)
+      requestIds = findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).map((message) =>
+        String(message.id),
       );
       expect(requestIds).toHaveLength(2);
     });
@@ -1894,23 +1806,19 @@ describe("createAgentChat — overlapping submits parity", () => {
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: secondRequestId,
       body: "",
-      done: true
+      done: true,
     });
 
-    const userMessages = chat.messages.filter(
-      (message) => message.role === "user"
-    );
+    const userMessages = chat.messages.filter((message) => message.role === "user");
     expect(userMessages).toHaveLength(2);
 
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_CHAT_MESSAGES,
-      messages: userMessages
+      messages: userMessages,
     });
 
     await vi.waitFor(() => {
-      expect(
-        chat.messages.some((message) => message.id === "assistant-1")
-      ).toBe(true);
+      expect(chat.messages.some((message) => message.id === "assistant-1")).toBe(true);
     });
   });
 
@@ -1928,21 +1836,19 @@ describe("createAgentChat — overlapping submits parity", () => {
         {
           id: "u1",
           role: "user",
-          parts: [{ type: "text", text: "First" }]
+          parts: [{ type: "text", text: "First" }],
         },
         {
           id: "u2",
           role: "user",
-          parts: [{ type: "text", text: "Second" }]
-        }
-      ]
+          parts: [{ type: "text", text: "Second" }],
+        },
+      ],
     });
 
     await vi.waitFor(() => {
       expect(chat.messages).toHaveLength(2);
-      expect(chat.messages.map((message) => message.role).join(",")).toBe(
-        "user,user"
-      );
+      expect(chat.messages.map((message) => message.role).join(",")).toBe("user,user");
     });
   });
 });

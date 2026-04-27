@@ -3,7 +3,7 @@ export {
   VoiceInput,
   createVoiceAgent,
   createVoiceInput,
-  WebSocketVoiceTransport
+  WebSocketVoiceTransport,
 } from "./voice.svelte.ts";
 export type {
   VoiceInputOptions,
@@ -16,5 +16,5 @@ export type {
   VoicePipelineMetrics,
   VoiceClientOptions,
   VoiceClientEvent,
-  VoiceClientEventMap
+  VoiceClientEventMap,
 } from "./voice.svelte.ts";

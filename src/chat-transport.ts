@@ -10,14 +10,8 @@ import { MessageType, type OutgoingMessage } from "@cloudflare/ai-chat/types";
 
 interface AgentChatConnection {
   send: (data: string) => void;
-  addEventListener: (
-    type: string,
-    listener: (event: MessageEvent) => void
-  ) => void;
-  removeEventListener: (
-    type: string,
-    listener: (event: MessageEvent) => void
-  ) => void;
+  addEventListener: (type: string, listener: (event: MessageEvent) => void) => void;
+  removeEventListener: (type: string, listener: (event: MessageEvent) => void) => void;
 }
 
 type PrepareBody<ChatMessage extends UIMessage> = (options: {
@@ -27,35 +21,34 @@ type PrepareBody<ChatMessage extends UIMessage> = (options: {
 }) => Promise<Record<string, unknown>> | Record<string, unknown>;
 
 export type AgentChatTransportEvent<ChatMessage extends UIMessage = UIMessage> =
-    | { type: "history-cleared" }
-    | { type: "messages-replaced"; messages: ChatMessage[] }
-    | { type: "message-updated"; message: ChatMessage }
-    | { type: "broadcast-resume"; streamId: string }
-    | {
-        type: "broadcast-response";
-        streamId: string;
-        chunkData: unknown;
-        done?: boolean;
-        error?: boolean;
-        replay?: boolean;
-        replayComplete?: boolean;
-        continuation?: boolean;
-      }
-    | {
-        type: "assistant-tail-released";
-        messageId?: string;
-      };
+  | { type: "history-cleared" }
+  | { type: "messages-replaced"; messages: ChatMessage[] }
+  | { type: "message-updated"; message: ChatMessage }
+  | { type: "broadcast-resume"; streamId: string }
+  | {
+      type: "broadcast-response";
+      streamId: string;
+      chunkData: unknown;
+      done?: boolean;
+      error?: boolean;
+      replay?: boolean;
+      replayComplete?: boolean;
+      continuation?: boolean;
+    }
+  | {
+      type: "assistant-tail-released";
+      messageId?: string;
+    };
 
 type AgentChatTransportOptions<ChatMessage extends UIMessage = UIMessage> = {
-  connection: AgentChatConnection;
+  getConnection: () => AgentChatConnection | null;
   prepareBody?: PrepareBody<ChatMessage>;
 };
 
-type AgentChatTransportStartOptions<ChatMessage extends UIMessage = UIMessage> =
-  {
-    onEvent: (event: AgentChatTransportEvent<ChatMessage>) => void;
-    shouldAcceptBroadcastResume: () => boolean;
-  };
+type AgentChatTransportStartOptions<ChatMessage extends UIMessage = UIMessage> = {
+  onEvent: (event: AgentChatTransportEvent<ChatMessage>) => void;
+  shouldAcceptBroadcastResume: () => boolean;
+};
 
 type ActiveStreamSession = {
   controller: ReadableStreamDefaultController<UIMessageChunk>;
@@ -63,7 +56,7 @@ type ActiveStreamSession = {
   activeReasoningIds: Set<string>;
   finish: (
     action: () => void,
-    options?: { ignoreRemaining?: boolean; emitLocalFinish?: boolean }
+    options?: { ignoreRemaining?: boolean; emitLocalFinish?: boolean },
   ) => void;
 };
 
@@ -84,12 +77,12 @@ type StreamResumingMessage<ChatMessage extends UIMessage> = Extract<
 >;
 
 export class AgentChatTransport<
-  ChatMessage extends UIMessage = UIMessage
+  ChatMessage extends UIMessage = UIMessage,
 > implements ChatTransport<ChatMessage> {
-  readonly #connection: AgentChatConnection;
+  readonly #getConnection: () => AgentChatConnection | null;
+  #startedConnection: AgentChatConnection | null = null;
   readonly #prepareBody?: PrepareBody<ChatMessage>;
-  #onEvent: ((event: AgentChatTransportEvent<ChatMessage>) => void) | null =
-    null;
+  #onEvent: ((event: AgentChatTransportEvent<ChatMessage>) => void) | null = null;
   #shouldAcceptBroadcastResume: (() => boolean) | null = null;
   readonly #activeStreams = new Map<string, ActiveStreamSession>();
   readonly #ignoredRequestIds = new Set<string>();
@@ -102,7 +95,7 @@ export class AgentChatTransport<
   #closed = false;
 
   constructor(options: AgentChatTransportOptions<ChatMessage>) {
-    this.#connection = options.connection;
+    this.#getConnection = options.getConnection;
     this.#prepareBody = options.prepareBody;
   }
 
@@ -111,10 +104,17 @@ export class AgentChatTransport<
       return;
     }
 
+    const connection = this.#getConnection();
+    if (!connection) {
+      throw new Error(
+        "[cloudflare-agents-svelte/chat] AgentChatTransport requires a connection before start()",
+      );
+    }
     this.#onEvent = options.onEvent;
     this.#shouldAcceptBroadcastResume = options.shouldAcceptBroadcastResume;
     this.#started = true;
-    this.#connection.addEventListener("message", this.#handleMessage);
+    this.#startedConnection = connection;
+    connection.addEventListener("message", this.#handleMessage);
   }
 
   prepareToolContinuation(): void {
@@ -143,14 +143,14 @@ export class AgentChatTransport<
       try {
         this.#send({
           id: requestId,
-          type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL
+          type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL,
         });
       } catch {
         // Ignore failures, e.g. if the connection is already closed.
       }
       session.finish(() => session.controller.close(), {
         ignoreRemaining: true,
-        emitLocalFinish: false
+        emitLocalFinish: false,
       });
     }
   }
@@ -169,10 +169,8 @@ export class AgentChatTransport<
       toolName: options.toolName,
       output: options.output,
       ...(options.state ? { state: options.state } : {}),
-      ...(options.errorText !== undefined
-        ? { errorText: options.errorText }
-        : {}),
-      autoContinue: options.autoContinue
+      ...(options.errorText !== undefined ? { errorText: options.errorText } : {}),
+      autoContinue: options.autoContinue,
     });
   }
 
@@ -185,7 +183,7 @@ export class AgentChatTransport<
       type: MessageType.CF_AGENT_TOOL_APPROVAL,
       toolCallId: options.toolCallId,
       approved: options.approved,
-      autoContinue: options.autoContinue
+      autoContinue: options.autoContinue,
     });
   }
 
@@ -208,20 +206,20 @@ export class AgentChatTransport<
       extraBody = await this.#prepareBody({
         messages: options.messages,
         trigger: options.trigger,
-        messageId: options.messageId
+        messageId: options.messageId,
       });
     }
     if (options.body) {
       extraBody = {
         ...extraBody,
-        ...(options.body as Record<string, unknown>)
+        ...(options.body as Record<string, unknown>),
       };
     }
 
     const bodyPayload = JSON.stringify({
       messages: options.messages,
       trigger: options.trigger,
-      ...extraBody
+      ...extraBody,
     });
 
     const abortError = new Error("Aborted");
@@ -232,14 +230,14 @@ export class AgentChatTransport<
       try {
         this.#send({
           id: requestId,
-          type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL
+          type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL,
         });
       } catch {
         // Ignore failures, e.g. if the connection is already closed.
       }
       session?.finish(() => session?.controller.error(abortError), {
         ignoreRemaining: true,
-        emitLocalFinish: false
+        emitLocalFinish: false,
       });
     };
 
@@ -251,16 +249,16 @@ export class AgentChatTransport<
       },
       cancel: () => {
         onAbort();
-      }
+      },
     });
 
     this.#send({
       id: requestId,
       init: {
         method: "POST",
-        body: bodyPayload
+        body: bodyPayload,
       },
-      type: MessageType.CF_AGENT_USE_CHAT_REQUEST
+      type: MessageType.CF_AGENT_USE_CHAT_REQUEST,
     });
 
     if (options.abortSignal) {
@@ -299,7 +297,7 @@ export class AgentChatTransport<
           done(this.#createResumeStream(requestId));
         },
         none: () => done(null),
-        cancel: () => done(null)
+        cancel: () => done(null),
       };
 
       this.#pendingResume?.cancel();
@@ -316,8 +314,9 @@ export class AgentChatTransport<
 
     this.#closed = true;
     if (this.#started) {
-      this.#connection.removeEventListener("message", this.#handleMessage);
+      this.#startedConnection?.removeEventListener("message", this.#handleMessage);
       this.#started = false;
+      this.#startedConnection = null;
     }
     this.#pendingResume?.cancel();
     this.#pendingResume = null;
@@ -326,7 +325,7 @@ export class AgentChatTransport<
       const abortError = new Error("Aborted");
       abortError.name = "AbortError";
       session.finish(() => session.controller.error(abortError), {
-        emitLocalFinish: false
+        emitLocalFinish: false,
       });
     }
     this.#activeStreams.clear();
@@ -354,7 +353,7 @@ export class AgentChatTransport<
     const finish = (
       action: () => void,
       pending?: PendingResume,
-      options?: { ignoreRemaining?: boolean }
+      options?: { ignoreRemaining?: boolean },
     ) => {
       if (completed) return;
       completed = true;
@@ -363,7 +362,7 @@ export class AgentChatTransport<
       if (requestId && session) {
         session.finish(action, {
           ignoreRemaining: options?.ignoreRemaining,
-          emitLocalFinish: true
+          emitLocalFinish: true,
         });
       } else {
         try {
@@ -383,20 +382,16 @@ export class AgentChatTransport<
         try {
           this.#send({
             type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL,
-            id: requestId
+            id: requestId,
           });
         } catch {
           // Ignore failures, e.g. if the connection is already closed.
         }
       }
 
-      finish(
-        () => readerController.error(abortError),
-        this.#pendingResume ?? undefined,
-        {
-          ignoreRemaining: requestId !== null
-        }
-      );
+      finish(() => readerController.error(abortError), this.#pendingResume ?? undefined, {
+        ignoreRemaining: requestId !== null,
+      });
       return true;
     };
 
@@ -420,20 +415,17 @@ export class AgentChatTransport<
           },
           cancel: () => {
             finish(() => controller.close(), pending);
-          }
+          },
         };
 
         this.#pendingResume?.cancel();
         this.#pendingResume = pending;
         this.#sendResumeRequest();
-        timeout = setTimeout(
-          () => finish(() => controller.close(), pending),
-          5000
-        );
+        timeout = setTimeout(() => finish(() => controller.close(), pending), 5000);
       },
       cancel: () => {
         finish(() => {});
-      }
+      },
     });
   }
 
@@ -446,14 +438,14 @@ export class AgentChatTransport<
       },
       cancel: () => {
         session?.finish(() => {}, { emitLocalFinish: false });
-      }
+      },
     });
   }
 
   #registerStream(
     requestId: string,
     controller: ReadableStreamDefaultController<UIMessageChunk>,
-    onFinish?: () => void
+    onFinish?: () => void,
   ): ActiveStreamSession {
     let completed = false;
     const session: ActiveStreamSession = {
@@ -476,7 +468,7 @@ export class AgentChatTransport<
           this.#releaseAssistantTail(requestId);
         }
         onFinish?.();
-      }
+      },
     };
 
     this.#activeStreams.set(requestId, session);
@@ -503,14 +495,14 @@ export class AgentChatTransport<
       case MessageType.CF_AGENT_CHAT_MESSAGES:
         this.#onEvent?.({
           type: "messages-replaced",
-          messages: data.messages as ChatMessage[]
+          messages: data.messages as ChatMessage[],
         });
         break;
 
       case MessageType.CF_AGENT_MESSAGE_UPDATED:
         this.#onEvent?.({
           type: "message-updated",
-          message: data.message as ChatMessage
+          message: data.message as ChatMessage,
         });
         break;
 
@@ -558,11 +550,10 @@ export class AgentChatTransport<
     const session = this.#activeStreams.get(requestId);
     if (session) {
       if (data.error) {
-        session.finish(
-          () =>
-            session.controller.error(new Error(data.body || "Stream error")),
-          { ignoreRemaining: true, emitLocalFinish: true }
-        );
+        session.finish(() => session.controller.error(new Error(data.body || "Stream error")), {
+          ignoreRemaining: true,
+          emitLocalFinish: true,
+        });
         return;
       }
 
@@ -572,7 +563,7 @@ export class AgentChatTransport<
 
       if (data.done) {
         session.finish(() => session.controller.close(), {
-          emitLocalFinish: true
+          emitLocalFinish: true,
         });
       }
       return;
@@ -594,7 +585,7 @@ export class AgentChatTransport<
       error: data.error,
       replay: data.replay,
       replayComplete: data.replayComplete,
-      continuation: data.continuation
+      continuation: data.continuation,
     });
   }
 
@@ -677,7 +668,7 @@ export class AgentChatTransport<
     this.#assistantMessageIds.delete(requestId);
     this.#onEvent?.({
       type: "assistant-tail-released",
-      ...(messageId ? { messageId } : {})
+      ...(messageId ? { messageId } : {}),
     });
   }
 
@@ -706,6 +697,10 @@ export class AgentChatTransport<
   }
 
   #send(payload: Record<string, unknown>): void {
-    this.#connection.send(JSON.stringify(payload));
+    const connection = this.#getConnection();
+    if (!connection) {
+      throw new Error("[cloudflare-agents-svelte/chat] AgentChatTransport is not connected");
+    }
+    connection.send(JSON.stringify(payload));
   }
 }

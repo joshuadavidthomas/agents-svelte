@@ -1,56 +1,54 @@
 {
   "name": "@joshthomas/cloudflare-agents-svelte",
+  "version": "0.1.0",
+  "private": false,
   "description": "Community Svelte 5 bindings for the Cloudflare Agents SDK",
   "keywords": [
+    "agents",
     "cloudflare",
     "cloudflare-agents",
-    "agents",
     "svelte",
     "sveltekit"
   ],
-  "version": "0.1.0",
-  "license": "MIT",
-  "type": "module",
-  "types": "./src/index.ts",
-  "svelte": "./src/index.ts",
-  "private": false,
-  "author": "Josh Thomas",
   "homepage": "https://github.com/joshuadavidthomas/cloudflare-agents-svelte#readme",
+  "bugs": {
+    "url": "https://github.com/joshuadavidthomas/cloudflare-agents-svelte/issues"
+  },
+  "license": "MIT",
+  "author": "Josh Thomas",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/joshuadavidthomas/cloudflare-agents-svelte.git"
   },
-  "bugs": {
-    "url": "https://github.com/joshuadavidthomas/cloudflare-agents-svelte/issues"
+  "files": [
+    "src/*.ts",
+    "src/*.svelte.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "types": "./src/index.ts",
+  "svelte": "./src/index.ts",
+  "exports": {
+    ".": {
+      "svelte": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./chat": {
+      "svelte": "./src/chat.ts",
+      "types": "./src/chat.ts",
+      "default": "./src/chat.ts"
+    },
+    "./voice": {
+      "svelte": "./src/voice.ts",
+      "types": "./src/voice.ts",
+      "default": "./src/voice.ts"
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "peerDependencies": {
-    "@ai-sdk/svelte": "^4.0.0",
-    "@cloudflare/ai-chat": ">=0.3.2 <1.0.0",
-    "@cloudflare/voice": ">=0.1.0 <1.0.0",
-    "agents": ">=0.9.0 <1.0.0",
-    "ai": "^6.0.0",
-    "partysocket": "^1.0.0",
-    "svelte": "^5.0.0"
-  },
-  "dependencies": {
-    "nanoid": "^5.1.9"
-  },
-  "peerDependenciesMeta": {
-    "@cloudflare/ai-chat": {
-      "optional": true
-    },
-    "@cloudflare/voice": {
-      "optional": true
-    },
-    "@ai-sdk/svelte": {
-      "optional": true
-    },
-    "ai": {
-      "optional": true
-    }
   },
   "scripts": {
     "format": "oxfmt --write .",
@@ -58,9 +56,13 @@
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
     "check": "npm run format:check && npm run lint && npm run typecheck",
-    "test": "vitest --run --config src/tests/vitest.config.ts",
+    "test": "vitest --run --config src/tests/vitest.config.ts && vitest --run --config src/tests/vitest.ssr.config.ts",
     "test:svelte": "vitest --run --config src/tests/vitest.config.ts",
+    "test:ssr": "vitest --run --config src/tests/vitest.ssr.config.ts",
     "pack:dry-run": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.9"
   },
   "devDependencies": {
     "@ai-sdk/svelte": "^4.0.0",
@@ -83,28 +85,27 @@
     "vitest-browser-svelte": "^2.1.1",
     "wrangler": "^4.83.0"
   },
-  "exports": {
-    ".": {
-      "svelte": "./src/index.ts",
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./chat": {
-      "svelte": "./src/chat.ts",
-      "types": "./src/chat.ts",
-      "default": "./src/chat.ts"
-    },
-    "./voice": {
-      "svelte": "./src/voice.ts",
-      "types": "./src/voice.ts",
-      "default": "./src/voice.ts"
-    },
-    "./package.json": "./package.json"
+  "peerDependencies": {
+    "@ai-sdk/svelte": "^4.0.0",
+    "@cloudflare/ai-chat": ">=0.3.2 <1.0.0",
+    "@cloudflare/voice": ">=0.1.0 <1.0.0",
+    "agents": ">=0.9.0 <1.0.0",
+    "ai": "^6.0.0",
+    "partysocket": "^1.0.0",
+    "svelte": "^5.0.0"
   },
-  "files": [
-    "src/*.ts",
-    "src/*.svelte.ts",
-    "README.md",
-    "LICENSE"
-  ]
+  "peerDependenciesMeta": {
+    "@cloudflare/ai-chat": {
+      "optional": true
+    },
+    "@cloudflare/voice": {
+      "optional": true
+    },
+    "@ai-sdk/svelte": {
+      "optional": true
+    },
+    "ai": {
+      "optional": true
+    }
+  }
 }

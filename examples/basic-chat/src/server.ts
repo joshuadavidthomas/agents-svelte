@@ -13,8 +13,7 @@ export class ChatAgent extends AIChatAgent<Env> {
     const workersai = createWorkersAI({ binding: this.env.AI });
     const result = streamText({
       model: workersai("@cf/google/gemma-4-26b-a4b-it"),
-      system:
-        "You are a concise assistant in a Svelte example for Cloudflare Agents.",
+      system: "You are a concise assistant in a Svelte example for Cloudflare Agents.",
       messages: await convertToModelMessages(this.messages),
     });
 

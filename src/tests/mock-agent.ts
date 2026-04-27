@@ -43,11 +43,12 @@ export function createMockAgent(params?: {
     send,
     close: vi.fn(),
     readyState: 1,
-    _pkurl: url
+    _pkurl: url,
   } as unknown as Agent<unknown, unknown>["socket"];
 
   const agent = {
     socket,
+    path: [{ agent: agentKebab, name }],
     state: undefined,
     identity: { name, agent: agentKebab, identified: true },
     connected: true,
@@ -56,10 +57,10 @@ export function createMockAgent(params?: {
     ready: Promise.resolve(),
     stub: {} as Agent<unknown, unknown>["stub"],
     call: (() => Promise.resolve()) as Agent<unknown, unknown>["call"],
+    connect: () => {},
     setState: () => {},
-    getHttpUrl: () =>
-      url.replace(/^ws:\/\//, "http://").replace(/^wss:\/\//, "https://"),
-    close: () => {}
+    getHttpUrl: () => url.replace(/^ws:\/\//, "http://").replace(/^wss:\/\//, "https://"),
+    close: () => {},
   } as unknown as Agent<unknown, unknown>;
 
   function dispatchServerMessage(data: unknown) {
@@ -77,6 +78,6 @@ export function createMockAgent(params?: {
     sentMessages,
     dispatchServerMessage,
     dispatchClose,
-    send
+    send,
   };
 }

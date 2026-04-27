@@ -6,13 +6,13 @@ import type {
   AgentChat,
   AgentChatToolCall,
   CreateAgentChatOptions,
-  ToolCallOutputOptions
+  ToolCallOutputOptions,
 } from "../chat.ts";
 import type {
   VoiceAgent,
   VoiceInput,
   VoiceInputOptions,
-  WebSocketVoiceTransport
+  WebSocketVoiceTransport,
 } from "../voice.ts";
 
 type RootExport = keyof typeof RootModule;
@@ -44,7 +44,7 @@ const agentOptions: CreateAgentOptions = { agent: "ChatAgent" };
 const chatOptions = {} as CreateAgentChatOptions;
 const voiceInputOptions: VoiceInputOptions = {
   agent: "VoiceAgent",
-  transport: voiceTransport
+  transport: voiceTransport,
 };
 const outputOptions: ToolCallOutputOptions = { output: { ok: true } };
 void agentOptions;

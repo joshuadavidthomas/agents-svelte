@@ -1,4 +1,4 @@
-import { onDestroy } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import { createSubscriber } from "svelte/reactivity";
 import {
   VoiceClient,
@@ -7,7 +7,7 @@ import {
   type VoiceStatus,
   type TranscriptMessage,
   type VoicePipelineMetrics,
-  type VoiceTransport
+  type VoiceTransport,
 } from "@cloudflare/voice/client";
 
 export { WebSocketVoiceTransport } from "@cloudflare/voice/client";
@@ -21,12 +21,12 @@ export type {
   VoicePipelineMetrics,
   VoiceClientOptions,
   VoiceClientEvent,
-  VoiceClientEventMap
+  VoiceClientEventMap,
 } from "@cloudflare/voice/client";
 
 function subscribeToVoiceEvent<K extends VoiceClientEvent>(
   client: VoiceClient,
-  event: K
+  event: K,
 ): () => void {
   return createSubscriber((update) => {
     const listener = () => update();
@@ -48,33 +48,24 @@ export class VoiceAgent {
   readonly #connectionChanged: () => void;
   readonly #errorChanged: () => void;
   readonly #customMessageChanged: () => void;
+  #connectStarted = false;
 
   constructor(options: VoiceClientOptions) {
     this.#client = new VoiceClient(options);
     this.#statusChanged = subscribeToVoiceEvent(this.#client, "statuschange");
-    this.#transcriptChanged = subscribeToVoiceEvent(
-      this.#client,
-      "transcriptchange"
-    );
-    this.#interimTranscriptChanged = subscribeToVoiceEvent(
-      this.#client,
-      "interimtranscript"
-    );
+    this.#transcriptChanged = subscribeToVoiceEvent(this.#client, "transcriptchange");
+    this.#interimTranscriptChanged = subscribeToVoiceEvent(this.#client, "interimtranscript");
     this.#metricsChanged = subscribeToVoiceEvent(this.#client, "metricschange");
-    this.#audioLevelChanged = subscribeToVoiceEvent(
-      this.#client,
-      "audiolevelchange"
-    );
+    this.#audioLevelChanged = subscribeToVoiceEvent(this.#client, "audiolevelchange");
     this.#muteChanged = subscribeToVoiceEvent(this.#client, "mutechange");
-    this.#connectionChanged = subscribeToVoiceEvent(
-      this.#client,
-      "connectionchange"
-    );
+    this.#connectionChanged = subscribeToVoiceEvent(this.#client, "connectionchange");
     this.#errorChanged = subscribeToVoiceEvent(this.#client, "error");
-    this.#customMessageChanged = subscribeToVoiceEvent(
-      this.#client,
-      "custommessage"
-    );
+    this.#customMessageChanged = subscribeToVoiceEvent(this.#client, "custommessage");
+  }
+
+  connect(): void {
+    if (this.#connectStarted) return;
+    this.#connectStarted = true;
     this.#client.connect();
   }
 
@@ -132,12 +123,14 @@ export class VoiceAgent {
   }
 
   close(): void {
+    this.#connectStarted = false;
     this.#client.disconnect();
   }
 }
 
 export function createVoiceAgent(options: VoiceClientOptions): VoiceAgent {
   const v = new VoiceAgent(options);
+  onMount(() => v.connect());
   onDestroy(() => v.close());
   return v;
 }
@@ -163,6 +156,7 @@ export class VoiceInput {
     text: string;
     timestamp: number;
   } | null>(null);
+  #connectStarted = false;
 
   constructor(options: VoiceInputOptions) {
     this.#client = new VoiceClient({
@@ -171,35 +165,29 @@ export class VoiceInput {
       host: options.host,
       transport: options.transport,
       silenceThreshold: options.silenceThreshold,
-      silenceDurationMs: options.silenceDurationMs
+      silenceDurationMs: options.silenceDurationMs,
     });
     this.#statusChanged = subscribeToVoiceEvent(this.#client, "statuschange");
-    this.#transcriptChanged = subscribeToVoiceEvent(
-      this.#client,
-      "transcriptchange"
-    );
-    this.#interimTranscriptChanged = subscribeToVoiceEvent(
-      this.#client,
-      "interimtranscript"
-    );
-    this.#audioLevelChanged = subscribeToVoiceEvent(
-      this.#client,
-      "audiolevelchange"
-    );
+    this.#transcriptChanged = subscribeToVoiceEvent(this.#client, "transcriptchange");
+    this.#interimTranscriptChanged = subscribeToVoiceEvent(this.#client, "interimtranscript");
+    this.#audioLevelChanged = subscribeToVoiceEvent(this.#client, "audiolevelchange");
     this.#muteChanged = subscribeToVoiceEvent(this.#client, "mutechange");
     this.#errorChanged = subscribeToVoiceEvent(this.#client, "error");
+  }
+
+  connect(): void {
+    if (this.#connectStarted) return;
+    this.#connectStarted = true;
     this.#client.connect();
   }
 
   get transcript(): string {
     this.#transcriptChanged();
-    const userMessages = this.#client.transcript.filter(
-      (m) => m.role === "user"
-    );
+    const userMessages = this.#client.transcript.filter((m) => m.role === "user");
     const boundary = this.#clearedThroughUserMessage;
     const boundaryIndex = boundary
       ? userMessages.findIndex(
-          (m) => m.text === boundary.text && m.timestamp === boundary.timestamp
+          (m) => m.text === boundary.text && m.timestamp === boundary.timestamp,
         )
       : -1;
     return userMessages
@@ -239,22 +227,20 @@ export class VoiceInput {
     this.#client.toggleMute();
   }
   clear(): void {
-    const userMessages = this.#client.transcript.filter(
-      (m) => m.role === "user"
-    );
+    const userMessages = this.#client.transcript.filter((m) => m.role === "user");
     const last = userMessages.at(-1);
-    this.#clearedThroughUserMessage = last
-      ? { text: last.text, timestamp: last.timestamp }
-      : null;
+    this.#clearedThroughUserMessage = last ? { text: last.text, timestamp: last.timestamp } : null;
   }
 
   close(): void {
+    this.#connectStarted = false;
     this.#client.disconnect();
   }
 }
 
 export function createVoiceInput(options: VoiceInputOptions): VoiceInput {
   const v = new VoiceInput(options);
+  onMount(() => v.connect());
   onDestroy(() => v.close());
   return v;
 }

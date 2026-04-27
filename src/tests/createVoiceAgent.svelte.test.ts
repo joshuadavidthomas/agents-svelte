@@ -3,10 +3,9 @@ import { flushSync } from "svelte";
 import type { VoiceTransport } from "../voice.svelte.ts";
 
 let transportInstance: (VoiceTransport & { connected: boolean }) | null = null;
-let transportSendJSON: ReturnType<
-  typeof vi.fn<(data: Record<string, unknown>) => void>
->;
+let transportSendJSON: ReturnType<typeof vi.fn<(data: Record<string, unknown>) => void>>;
 let transportSendBinary: ReturnType<typeof vi.fn<(data: ArrayBuffer) => void>>;
+let transportConnect: ReturnType<typeof vi.fn<() => void>>;
 let transportDisconnect: ReturnType<typeof vi.fn<() => void>>;
 
 function createFakeTransport(): VoiceTransport & { connected: boolean } {
@@ -16,14 +15,15 @@ function createFakeTransport(): VoiceTransport & { connected: boolean } {
     onclose: null,
     onerror: null,
     onmessage: null,
-    connect: () => {
-      transport.connected = true;
-      queueMicrotask(() => transport.onopen?.());
-    },
+    connect: () => transportConnect(),
     disconnect: () => transportDisconnect(),
     sendJSON: (data) => transportSendJSON(data),
-    sendBinary: (data) => transportSendBinary(data)
+    sendBinary: (data) => transportSendBinary(data),
   };
+  transportConnect.mockImplementation(() => {
+    transport.connected = true;
+    queueMicrotask(() => transport.onopen?.());
+  });
   transportDisconnect.mockImplementation(() => {
     transport.connected = false;
     transport.onclose?.();
@@ -38,13 +38,14 @@ type VoiceAgentInstance = InstanceType<typeof VoiceAgent>;
 const cleanups: Array<() => void> = [];
 
 function makeVoice(
-  overrides: Partial<ConstructorParameters<typeof VoiceAgent>[0]> = {}
+  overrides: Partial<ConstructorParameters<typeof VoiceAgent>[0]> = {},
 ): VoiceAgentInstance {
   const v = new VoiceAgent({
     agent: "voice-agent",
     transport: createFakeTransport(),
-    ...overrides
+    ...overrides,
   });
+  v.connect();
   cleanups.push(() => v.close());
   return v;
 }
@@ -56,6 +57,7 @@ function fireJSON(msg: Record<string, unknown>) {
 beforeEach(() => {
   transportSendJSON = vi.fn();
   transportSendBinary = vi.fn();
+  transportConnect = vi.fn();
   transportDisconnect = vi.fn();
   transportInstance = null;
 });
@@ -85,6 +87,17 @@ describe("VoiceAgent", () => {
     expect(v.isMuted).toBe(false);
   });
 
+  it("can connect again after close", async () => {
+    const v = makeVoice();
+    await vi.waitFor(() => expect(v.connected).toBe(true));
+
+    v.close();
+    expect(transportDisconnect).toHaveBeenCalledTimes(1);
+
+    v.connect();
+    expect(transportConnect).toHaveBeenCalledTimes(2);
+  });
+
   it("reflects VoiceClient state through reactive getters", async () => {
     const v = makeVoice();
     await vi.waitFor(() => expect(v.connected).toBe(true));
@@ -96,7 +109,7 @@ describe("VoiceAgent", () => {
       llm_ms: 800,
       tts_ms: 200,
       first_audio_ms: 1470,
-      total_ms: 1600
+      total_ms: 1600,
     });
     fireJSON({ type: "error", message: "Pipeline failed" });
     flushSync();
@@ -104,7 +117,7 @@ describe("VoiceAgent", () => {
     await vi.waitFor(() => expect(v.status).toBe("listening"));
     expect(v.transcript.at(-1)).toMatchObject({
       role: "user",
-      text: "Hello agent"
+      text: "Hello agent",
     });
     expect(v.metrics).toMatchObject({ llm_ms: 800, total_ms: 1600 });
     expect(v.error).toBe("Pipeline failed");
@@ -133,7 +146,7 @@ describe("VoiceAgent", () => {
       llm_ms: 800,
       tts_ms: 200,
       first_audio_ms: 1470,
-      total_ms: 1600
+      total_ms: 1600,
     });
     flushSync();
     expect(runs).toBe(1);
@@ -154,8 +167,8 @@ describe("VoiceAgent", () => {
     await vi.waitFor(() =>
       expect(v.lastCustomMessage).toEqual({
         type: "app_event",
-        payload: { ok: true }
-      })
+        payload: { ok: true },
+      }),
     );
   });
 

@@ -11,7 +11,7 @@ export const weatherApprovalFlow = {
   initialReasoning: "Initial reasoning",
   finalReasoning: "Final reasoning",
   toolOutput: "The weather in Los Angeles is sunny, 72°F.",
-  finalText: "Here is the approved weather."
+  finalText: "Here is the approved weather.",
 } as const;
 
 export function weatherApprovalInitialMessages(): UIMessage[] {
@@ -19,7 +19,7 @@ export function weatherApprovalInitialMessages(): UIMessage[] {
     {
       id: weatherApprovalFlow.userId,
       role: "user",
-      parts: [{ type: "text", text: "weather in LA" }]
+      parts: [{ type: "text", text: "weather in LA" }],
     },
     {
       id: weatherApprovalFlow.assistantId,
@@ -28,17 +28,17 @@ export function weatherApprovalInitialMessages(): UIMessage[] {
         {
           type: "reasoning",
           text: weatherApprovalFlow.initialReasoning,
-          state: "done"
+          state: "done",
         },
         {
           type: "tool-getWeatherInformation",
           toolCallId: weatherApprovalFlow.toolCallId,
           state: "approval-requested",
           input: { city: "Los Angeles" },
-          approval: { id: weatherApprovalFlow.approvalId }
-        } as never
-      ]
-    }
+          approval: { id: weatherApprovalFlow.approvalId },
+        } as never,
+      ],
+    },
   ];
 }
 
@@ -50,7 +50,7 @@ export function staleWeatherApprovalAssistant(): UIMessage {
       {
         type: "reasoning",
         text: weatherApprovalFlow.initialReasoning,
-        state: "done"
+        state: "done",
       },
       {
         type: "tool-getWeatherInformation",
@@ -58,19 +58,19 @@ export function staleWeatherApprovalAssistant(): UIMessage {
         state: "output-available",
         input: { city: "Los Angeles" },
         output: weatherApprovalFlow.toolOutput,
-        approval: { id: weatherApprovalFlow.approvalId, approved: true }
-      } as never
-    ]
+        approval: { id: weatherApprovalFlow.approvalId, approved: true },
+      } as never,
+    ],
   };
 }
 
 export function dispatchWeatherApprovalContinuationStart(
   mock: MockAgent,
-  streamId = weatherApprovalFlow.streamId
+  streamId = weatherApprovalFlow.streamId,
 ): void {
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_STREAM_RESUMING,
-    id: streamId
+    id: streamId,
   });
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
@@ -78,10 +78,10 @@ export function dispatchWeatherApprovalContinuationStart(
     body: JSON.stringify({
       type: "tool-output-available",
       toolCallId: weatherApprovalFlow.toolCallId,
-      output: weatherApprovalFlow.toolOutput
+      output: weatherApprovalFlow.toolOutput,
     }),
     done: false,
-    continuation: true
+    continuation: true,
   });
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
@@ -89,10 +89,10 @@ export function dispatchWeatherApprovalContinuationStart(
     body: JSON.stringify({
       type: "reasoning-delta",
       id: "reason-final",
-      delta: weatherApprovalFlow.finalReasoning
+      delta: weatherApprovalFlow.finalReasoning,
     }),
     done: false,
-    continuation: true
+    continuation: true,
   });
 }
 
@@ -100,24 +100,24 @@ export function dispatchStaleWeatherApprovalSync(mock: MockAgent): void {
   const staleAssistant = staleWeatherApprovalAssistant();
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_MESSAGE_UPDATED,
-    message: staleAssistant
+    message: staleAssistant,
   });
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_CHAT_MESSAGES,
-    messages: [weatherApprovalInitialMessages()[0], staleAssistant]
+    messages: [weatherApprovalInitialMessages()[0], staleAssistant],
   });
 }
 
 export function dispatchWeatherApprovalContinuationFinish(
   mock: MockAgent,
-  streamId = weatherApprovalFlow.streamId
+  streamId = weatherApprovalFlow.streamId,
 ): void {
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
     id: streamId,
     body: JSON.stringify({ type: "reasoning-end", id: "reason-final" }),
     done: false,
-    continuation: true
+    continuation: true,
   });
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
@@ -125,17 +125,17 @@ export function dispatchWeatherApprovalContinuationFinish(
     body: JSON.stringify({
       type: "text-delta",
       id: "text-final",
-      delta: weatherApprovalFlow.finalText
+      delta: weatherApprovalFlow.finalText,
     }),
     done: false,
-    continuation: true
+    continuation: true,
   });
   mock.dispatchServerMessage({
     type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
     id: streamId,
     body: "",
     done: true,
-    continuation: true
+    continuation: true,
   });
 }
 
@@ -144,7 +144,7 @@ export function expectedWeatherApprovalFinalParts(): UIMessage["parts"] {
     {
       type: "reasoning",
       text: weatherApprovalFlow.initialReasoning,
-      state: "done"
+      state: "done",
     },
     {
       type: "tool-getWeatherInformation",
@@ -152,17 +152,17 @@ export function expectedWeatherApprovalFinalParts(): UIMessage["parts"] {
       state: "output-available",
       input: { city: "Los Angeles" },
       output: weatherApprovalFlow.toolOutput,
-      approval: { id: weatherApprovalFlow.approvalId, approved: true }
+      approval: { id: weatherApprovalFlow.approvalId, approved: true },
     } as never,
     {
       type: "reasoning",
       text: weatherApprovalFlow.finalReasoning,
-      state: "done"
+      state: "done",
     },
     {
       type: "text",
       text: weatherApprovalFlow.finalText,
-      state: "streaming"
-    }
+      state: "streaming",
+    },
   ];
 }

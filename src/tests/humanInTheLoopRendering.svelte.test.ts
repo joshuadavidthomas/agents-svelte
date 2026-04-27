@@ -10,7 +10,7 @@ import {
   dispatchWeatherApprovalContinuationFinish,
   dispatchWeatherApprovalContinuationStart,
   weatherApprovalFlow,
-  weatherApprovalInitialMessages
+  weatherApprovalInitialMessages,
 } from "./human-loop-flow.ts";
 
 const cleanups: Array<() => void> = [];
@@ -28,23 +28,21 @@ async function waitForChatInitialized(chat: { initialized: boolean }) {
   });
 }
 
-function findSent(
-  mock: MockAgent,
-  type: string
-): Record<string, unknown> | undefined {
+function findSent(mock: MockAgent, type: string): Record<string, unknown> | undefined {
   return mock.sentMessages.find((m) => m.type === type);
 }
 
 function makeChat<M extends UIMessage = UIMessage>(
   mock: MockAgent,
-  overrides: Partial<CreateAgentChatOptions<M>> = {}
+  overrides: Partial<CreateAgentChatOptions<M>> = {},
 ): AgentChat<M> {
   const chat = new AgentChat<M>({
     agent: mock.agent,
     getInitialMessages: null,
     resume: false,
-    ...overrides
+    ...overrides,
   });
+  chat.connect();
   cleanups.push(() => chat.close());
   return chat;
 }
@@ -54,52 +52,39 @@ describe("human-in-the-loop transcript rendering", () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
       resume: true,
-      initialMessages: weatherApprovalInitialMessages()
+      initialMessages: weatherApprovalInitialMessages(),
     });
     await waitForChatInitialized(chat);
 
     const screen = await render(HumanLoopTranscriptHarness, { chat });
 
-    await expect
-      .element(screen.getByText(weatherApprovalFlow.initialReasoning))
-      .toBeVisible();
+    await expect.element(screen.getByText(weatherApprovalFlow.initialReasoning)).toBeVisible();
     await expect.element(screen.getByText("Approval")).toBeVisible();
 
     chat.addToolApprovalResponse({
       id: weatherApprovalFlow.approvalId,
-      approved: true
+      approved: true,
     });
     await vi.waitFor(() => {
       expect(findSent(mock, MessageType.CF_AGENT_TOOL_APPROVAL)).toBeDefined();
-      expect(
-        findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)
-      ).toBeDefined();
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
     });
 
     dispatchWeatherApprovalContinuationStart(mock);
     dispatchStaleWeatherApprovalSync(mock);
 
-    await expect
-      .element(screen.getByText(weatherApprovalFlow.finalReasoning))
-      .toBeVisible();
+    await expect.element(screen.getByText(weatherApprovalFlow.finalReasoning)).toBeVisible();
 
     dispatchWeatherApprovalContinuationFinish(mock);
 
-    await expect
-      .element(screen.getByText(weatherApprovalFlow.initialReasoning))
-      .toBeVisible();
-    await expect
-      .element(screen.getByText(weatherApprovalFlow.finalReasoning))
-      .toBeVisible();
+    await expect.element(screen.getByText(weatherApprovalFlow.initialReasoning)).toBeVisible();
+    await expect.element(screen.getByText(weatherApprovalFlow.finalReasoning)).toBeVisible();
     await expect.element(screen.getByText("Done")).toBeVisible();
     await expect
       .element(screen.getByText(JSON.stringify(weatherApprovalFlow.toolOutput)))
       .toBeVisible();
-    await expect
-      .element(screen.getByText(weatherApprovalFlow.finalText))
-      .toBeVisible();
+    await expect.element(screen.getByText(weatherApprovalFlow.finalText)).toBeVisible();
 
-    expect(screen.container.querySelectorAll('[data-testid="reasoning-part"]'))
-      .toHaveLength(2);
+    expect(screen.container.querySelectorAll('[data-testid="reasoning-part"]')).toHaveLength(2);
   });
 });

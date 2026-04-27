@@ -1,9 +1,4 @@
-import {
-  Agent,
-  routeAgentRequest,
-  type Connection,
-  type WSMessage,
-} from "agents";
+import { Agent, routeAgentRequest, type Connection, type WSMessage } from "agents";
 import {
   withVoice,
   WorkersAIFluxSTT,
@@ -108,8 +103,7 @@ export class MyVoiceAgent extends VoiceAgent<Env> {
       ],
       tools: {
         get_current_time: tool({
-          description:
-            "Get the current date and time. Use when the user asks what time it is.",
+          description: "Get the current date and time. Use when the user asks what time it is.",
           inputSchema: z.object({}),
           execute: async () => {
             const now = new Date();
@@ -131,12 +125,8 @@ export class MyVoiceAgent extends VoiceAgent<Env> {
         set_reminder: tool({
           description: "Set a reminder that will be spoken aloud after a delay.",
           inputSchema: z.object({
-            message: z
-              .string()
-              .describe("The reminder message to speak to the user"),
-            delay_seconds: z
-              .number()
-              .describe("How many seconds from now to trigger the reminder"),
+            message: z.string().describe("The reminder message to speak to the user"),
+            delay_seconds: z.number().describe("How many seconds from now to trigger the reminder"),
           }),
           execute: async ({ message, delay_seconds }) => {
             await this.schedule(delay_seconds, "speakReminder", { message });
@@ -152,19 +142,11 @@ export class MyVoiceAgent extends VoiceAgent<Env> {
           description:
             "Get the current weather for a location. Use when the user asks about the weather.",
           inputSchema: z.object({
-            location: z
-              .string()
-              .describe("The city or location to check weather for"),
+            location: z.string().describe("The city or location to check weather for"),
           }),
           execute: async ({ location }) => {
-            const conditions = [
-              "sunny",
-              "partly cloudy",
-              "overcast",
-              "light rain",
-            ];
-            const condition =
-              conditions[Math.floor(Math.random() * conditions.length)];
+            const conditions = ["sunny", "partly cloudy", "overcast", "light rain"];
+            const condition = conditions[Math.floor(Math.random() * conditions.length)];
             const temp = Math.floor(55 + Math.random() * 35);
             return {
               location,
@@ -214,10 +196,7 @@ export default {
       }
 
       if (!appId || !apiToken) {
-        return Response.json(
-          { error: "SFU credentials not configured" },
-          { status: 500 },
-        );
+        return Response.json({ error: "SFU credentials not configured" }, { status: 500 });
       }
 
       const response = await handleSFURequest(request, {
@@ -228,9 +207,6 @@ export default {
       if (response) return response;
     }
 
-    return (
-      (await routeAgentRequest(request, env)) ??
-      new Response("Not found", { status: 404 })
-    );
+    return (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;

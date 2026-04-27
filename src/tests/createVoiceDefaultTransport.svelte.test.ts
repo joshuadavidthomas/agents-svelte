@@ -54,19 +54,18 @@ describe("VoiceAgent default transport", () => {
     const voice = new VoiceAgent({
       agent: "VoiceAgent",
       name: "session-1",
-      host: "example.com"
+      host: "example.com",
     });
+    voice.connect();
 
     try {
       await vi.waitFor(() => expect(voice.connected).toBe(true));
 
       const socket = latestSocket();
-      const hello = socket.sent.find(
-        (payload): payload is string => typeof payload === "string"
-      );
+      const hello = socket.sent.find((payload): payload is string => typeof payload === "string");
       expect(hello ? JSON.parse(hello) : null).toMatchObject({
         type: "hello",
-        protocol_version: expect.any(Number)
+        protocol_version: expect.any(Number),
       });
 
       voice.close();

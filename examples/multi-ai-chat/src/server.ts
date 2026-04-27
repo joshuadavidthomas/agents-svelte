@@ -36,8 +36,10 @@ export class Inbox extends Agent<Env, InboxState> {
   initialState = { chats: [] };
 
   async onStart() {
-    this.sql`CREATE TABLE IF NOT EXISTS chat_meta (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_message_preview TEXT)`;
-    this.sql`CREATE TABLE IF NOT EXISTS inbox_memory (label TEXT PRIMARY KEY, content TEXT NOT NULL, updated_at TEXT NOT NULL)`;
+    this
+      .sql`CREATE TABLE IF NOT EXISTS chat_meta (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_message_preview TEXT)`;
+    this
+      .sql`CREATE TABLE IF NOT EXISTS inbox_memory (label TEXT PRIMARY KEY, content TEXT NOT NULL, updated_at TEXT NOT NULL)`;
     await this.refreshState();
   }
 
@@ -53,7 +55,8 @@ export class Inbox extends Agent<Env, InboxState> {
     const now = new Date().toISOString();
     const title = opts?.title?.trim() || defaultTitle();
     await this.subAgent(Chat, id);
-    this.sql`INSERT INTO chat_meta (id, title, created_at, updated_at) VALUES (${id}, ${title}, ${now}, ${now})`;
+    this
+      .sql`INSERT INTO chat_meta (id, title, created_at, updated_at) VALUES (${id}, ${title}, ${now}, ${now})`;
     await this.refreshState();
     return id;
   }
@@ -76,26 +79,31 @@ export class Inbox extends Agent<Env, InboxState> {
 
   @callable()
   async getSharedMemory(label = MEMORY_LABEL) {
-    const rows = this.sql<{ content: string }>`SELECT content FROM inbox_memory WHERE label = ${label} LIMIT 1`;
+    const rows = this.sql<{
+      content: string;
+    }>`SELECT content FROM inbox_memory WHERE label = ${label} LIMIT 1`;
     return rows[0]?.content ?? "";
   }
 
   @callable()
   async setSharedMemory(label = MEMORY_LABEL, content: string) {
     const now = new Date().toISOString();
-    this.sql`INSERT INTO inbox_memory (label, content, updated_at) VALUES (${label}, ${content}, ${now}) ON CONFLICT(label) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`;
+    this
+      .sql`INSERT INTO inbox_memory (label, content, updated_at) VALUES (${label}, ${content}, ${now}) ON CONFLICT(label) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`;
     return content;
   }
 
   @callable()
   async recordChatTurn(chatId: string, preview: string) {
     const now = new Date().toISOString();
-    this.sql`UPDATE chat_meta SET updated_at = ${now}, last_message_preview = ${preview} WHERE id = ${chatId}`;
+    this
+      .sql`UPDATE chat_meta SET updated_at = ${now}, last_message_preview = ${preview} WHERE id = ${chatId}`;
     await this.refreshState();
   }
 
   async refreshState() {
-    const rows = this.sql<ChatSummary>`SELECT id, title, created_at as createdAt, updated_at as updatedAt, last_message_preview as lastMessagePreview FROM chat_meta ORDER BY updated_at DESC`;
+    const rows = this
+      .sql<ChatSummary>`SELECT id, title, created_at as createdAt, updated_at as updatedAt, last_message_preview as lastMessagePreview FROM chat_meta ORDER BY updated_at DESC`;
     this.setState({ chats: [...rows] });
   }
 }
@@ -147,7 +155,13 @@ export class Chat extends AIChatAgent<Env> {
     return result.toUIMessageStreamResponse({
       messageMetadata: ({ part }) => {
         if (part.type !== "finish") return undefined;
-        return { usage: { inputTokens: part.totalUsage.inputTokens, outputTokens: part.totalUsage.outputTokens, totalTokens: part.totalUsage.totalTokens } };
+        return {
+          usage: {
+            inputTokens: part.totalUsage.inputTokens,
+            outputTokens: part.totalUsage.outputTokens,
+            totalTokens: part.totalUsage.totalTokens,
+          },
+        };
       },
     });
   }
@@ -155,11 +169,12 @@ export class Chat extends AIChatAgent<Env> {
   async onChatResponse() {
     const inbox = await this.parentAgent(Inbox);
     const latest = this.messages.at(-1);
-    const preview = latest?.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join(" ")
-      .slice(0, 120) || "No messages yet";
+    const preview =
+      latest?.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join(" ")
+        .slice(0, 120) || "No messages yet";
     await inbox.recordChatTurn(this.name, preview);
   }
 }

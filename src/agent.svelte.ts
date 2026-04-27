@@ -1,4 +1,4 @@
-import { onDestroy } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import PartySocket from "partysocket";
 import type {
   AgentPromiseReturnType,
@@ -6,7 +6,7 @@ import type {
   OptionalAgentMethods,
   RequiredAgentMethods,
   StreamOptions,
-  UntypedAgentStub
+  UntypedAgentStub,
 } from "agents/client";
 import { createStubProxy } from "agents/client";
 import type { MCPServersState, RPCRequest, RPCResponse } from "agents";
@@ -39,13 +39,13 @@ export interface CreateAgentOptions {
 type OptionalArgsCall<AgentT> = <K extends keyof OptionalAgentMethods<AgentT>>(
   method: K,
   args?: Parameters<OptionalAgentMethods<AgentT>[K]>,
-  stream?: StreamOptions
+  stream?: StreamOptions,
 ) => AgentPromiseReturnType<AgentT, K>;
 
 type RequiredArgsCall<AgentT> = <K extends keyof RequiredAgentMethods<AgentT>>(
   method: K,
   args: Parameters<RequiredAgentMethods<AgentT>[K]>,
-  stream?: StreamOptions
+  stream?: StreamOptions,
 ) => AgentPromiseReturnType<AgentT, K>;
 
 type TypedCall<AgentT> = OptionalArgsCall<AgentT> & RequiredArgsCall<AgentT>;
@@ -53,7 +53,7 @@ type TypedCall<AgentT> = OptionalArgsCall<AgentT> & RequiredArgsCall<AgentT>;
 type UntypedCall = <T = unknown>(
   method: string,
   args?: unknown[],
-  stream?: StreamOptions
+  stream?: StreamOptions,
 ) => Promise<T>;
 
 export interface Identity {
@@ -75,14 +75,15 @@ export interface IdentityChange {
 }
 
 export class Agent<AgentT = unknown, State = unknown> {
-  readonly socket: PartySocket;
   readonly path: ReadonlyArray<AgentRouteSegment>;
+
+  #socket: PartySocket | null = null;
 
   state = $state<State | undefined>(undefined);
   identity = $state<Identity>({
     name: "default",
     agent: "",
-    identified: false
+    identified: false,
   });
   connected = $state(false);
   stateError = $state<string | null>(null);
@@ -104,73 +105,67 @@ export class Agent<AgentT = unknown, State = unknown> {
   >();
   #previousIdentity: { name: string | null; agent: string | null } = {
     name: null,
-    agent: null
+    agent: null,
   };
   #eventSeq = 0;
-  readonly #httpUrl: string;
+  readonly #options: CreateAgentOptions;
+  #httpUrl: string | null = null;
 
   constructor(options: CreateAgentOptions) {
+    this.#options = options;
     const agentNamespace = camelCaseToKebabCase(options.agent);
     const roomName = options.name ?? "default";
-    const prefix = options.prefix ?? "agents";
-    const subPath = options.sub
-      ?.map(
-        (sub) =>
-          `sub/${camelCaseToKebabCase(sub.agent)}/${encodeURIComponent(sub.name)}`
-      )
-      .join("/");
     this.path = [
       { agent: agentNamespace, name: roomName },
       ...(options.sub?.map((sub) => ({
         agent: camelCaseToKebabCase(sub.agent),
-        name: sub.name
-      })) ?? [])
+        name: sub.name,
+      })) ?? []),
     ];
 
     if (agentNamespace !== agentNamespace.toLowerCase()) {
       console.warn(
-        `[cloudflare-agents-svelte] Agent namespace should be lowercase. Got: ${agentNamespace}`
+        `[cloudflare-agents-svelte] Agent namespace should be lowercase. Got: ${agentNamespace}`,
       );
     }
 
     this.identity = {
       name: this.path.at(-1)?.name ?? roomName,
       agent: this.path.at(-1)?.agent ?? agentNamespace,
-      identified: false
+      identified: false,
     };
 
-    let host = options.host;
-    if (!host) {
-      if (typeof window === "undefined") {
-        throw new Error(
-          "[cloudflare-agents-svelte] `host` is required when not running in a browser"
-        );
-      }
-      host = window.location.host;
-    }
-    const baseSocketOpts = {
-      host,
-      id: options.id,
-      path: options.path,
-      protocol: options.protocol,
-      protocols: options.protocols,
-      query: options.query
-    };
-    const routingOpts = options.basePath
-      ? { basePath: options.basePath }
-      : {
-          party: agentNamespace,
-          prefix,
-          room: roomName
-        };
-
-    let normalizedHost = host.replace(/^(http|https|ws|wss):\/\//, "");
-    normalizedHost = normalizedHost.endsWith("/")
-      ? normalizedHost.slice(0, -1)
-      : normalizedHost;
     if (options.path?.startsWith("/")) {
       throw new Error("path must not start with a slash");
     }
+
+    this.call = this.#call as Agent<AgentT, State>["call"];
+    this.stub = createStubProxy(this.#call as UntypedCall) as Agent<AgentT, State>["stub"];
+  }
+
+  get socket(): PartySocket | null {
+    return this.#socket;
+  }
+
+  #resolveConnectionOptions(): { host: string; route: string; subPath?: string; httpUrl: string } {
+    const options = this.#options;
+    const agentNamespace = this.path[0].agent;
+    const roomName = this.path[0].name;
+    const prefix = options.prefix ?? "agents";
+    const subPath = this.path
+      .slice(1)
+      .map((sub) => `sub/${sub.agent}/${encodeURIComponent(sub.name)}`)
+      .join("/");
+    let host = options.host;
+    if (!host) {
+      if (typeof window === "undefined") {
+        throw new Error("[cloudflare-agents-svelte] `host` is required outside the browser");
+      }
+      host = window.location.host;
+    }
+
+    let normalizedHost = host.replace(/^(http|https|ws|wss):\/\//, "");
+    normalizedHost = normalizedHost.endsWith("/") ? normalizedHost.slice(0, -1) : normalizedHost;
     const socketProtocol =
       options.protocol ??
       (normalizedHost.startsWith("localhost:") ||
@@ -188,47 +183,67 @@ export class Agent<AgentT = unknown, State = unknown> {
     const route = options.basePath
       ? options.basePath
       : [prefix, agentNamespace, roomName, subPath].filter(Boolean).join("/");
-    this.#httpUrl = `${httpProtocol}://${normalizedHost}/${route}${path}`;
+    return { host, route, subPath, httpUrl: `${httpProtocol}://${normalizedHost}/${route}${path}` };
+  }
 
+  connect(): void {
+    if (this.#socket) return;
+    const options = this.#options;
+    const agentNamespace = this.path[0].agent;
+    const roomName = this.path[0].name;
+    const prefix = options.prefix ?? "agents";
+    const { host, route, subPath, httpUrl } = this.#resolveConnectionOptions();
+    this.#httpUrl = httpUrl;
+    const baseSocketOpts = {
+      host,
+      id: options.id,
+      path: options.path,
+      protocol: options.protocol,
+      protocols: options.protocols,
+      query: options.query,
+    };
+    const routingOpts = options.basePath
+      ? { basePath: options.basePath }
+      : { party: agentNamespace, prefix, room: roomName };
     const socketOpts = subPath
       ? { ...baseSocketOpts, basePath: route }
       : { ...baseSocketOpts, ...routingOpts };
-
-    this.socket = new PartySocket(socketOpts);
-    this.socket.addEventListener("message", this.#handleMessage);
-    this.socket.addEventListener("open", this.#handleOpen);
-    this.socket.addEventListener("close", this.#handleClose);
-    this.socket.addEventListener("error", this.#handleError);
-
-    this.call = this.#call as Agent<AgentT, State>["call"];
-    this.stub = createStubProxy(this.#call as UntypedCall) as Agent<
-      AgentT,
-      State
-    >["stub"];
+    const socket = new PartySocket(socketOpts);
+    socket.addEventListener("message", this.#handleMessage);
+    socket.addEventListener("open", this.#handleOpen);
+    socket.addEventListener("close", this.#handleClose);
+    socket.addEventListener("error", this.#handleError);
+    this.#socket = socket;
   }
 
   setState(next: State): void {
-    this.socket.send(
-      JSON.stringify({ type: MessageType.CF_AGENT_STATE, state: next })
-    );
+    const socket = this.#requireSocket("agent.setState()");
+    socket.send(JSON.stringify({ type: MessageType.CF_AGENT_STATE, state: next }));
     this.state = next;
     this.lastStateUpdate = {
       state: next,
       source: "client",
-      seq: ++this.#eventSeq
+      seq: ++this.#eventSeq,
     };
   }
 
   getHttpUrl(): string {
+    if (!this.#httpUrl) {
+      this.#httpUrl = this.#resolveConnectionOptions().httpUrl;
+    }
     return this.#httpUrl;
   }
 
   close(): void {
-    this.socket.removeEventListener("message", this.#handleMessage);
-    this.socket.removeEventListener("open", this.#handleOpen);
-    this.socket.removeEventListener("close", this.#handleClose);
-    this.socket.removeEventListener("error", this.#handleError);
-    this.socket.close();
+    if (!this.#socket) return;
+    const socket = this.#socket;
+    socket.removeEventListener("message", this.#handleMessage);
+    socket.removeEventListener("open", this.#handleOpen);
+    socket.removeEventListener("close", this.#handleClose);
+    socket.removeEventListener("error", this.#handleError);
+    socket.close();
+    this.#socket = null;
+    this.#markClosed();
   }
 
   #handleOpen = (_e: Event) => {
@@ -256,7 +271,7 @@ export class Agent<AgentT = unknown, State = unknown> {
         const newIdentity = {
           name: newName,
           agent: newAgent,
-          identified: true
+          identified: true,
         } satisfies Identity;
         this.identity = newIdentity;
 
@@ -269,10 +284,10 @@ export class Agent<AgentT = unknown, State = unknown> {
             oldIdentity: {
               name: oldName,
               agent: oldAgent,
-              identified: true
+              identified: true,
             },
             newIdentity,
-            seq: ++this.#eventSeq
+            seq: ++this.#eventSeq,
           };
         }
 
@@ -285,7 +300,7 @@ export class Agent<AgentT = unknown, State = unknown> {
         this.lastStateUpdate = {
           state: this.state as State,
           source: "server",
-          seq: ++this.#eventSeq
+          seq: ++this.#eventSeq,
         };
         return;
 
@@ -325,6 +340,19 @@ export class Agent<AgentT = unknown, State = unknown> {
   };
 
   #handleClose = (_e: CloseEvent) => {
+    this.#markClosed();
+  };
+
+  #handleError = (_e: Event) => {};
+
+  #requireSocket(operation: string): PartySocket {
+    if (!this.#socket) {
+      throw new Error(`[cloudflare-agents-svelte] ${operation} requires a connected Agent`);
+    }
+    return this.#socket;
+  }
+
+  #markClosed(): void {
     this.connected = false;
     this.identity = { ...this.identity, identified: false };
 
@@ -334,37 +362,37 @@ export class Agent<AgentT = unknown, State = unknown> {
       p.stream?.onError?.("Connection closed");
     }
     this.#pending.clear();
-  };
+  }
 
-  #handleError = (_e: Event) => {};
-
-  #call = <T>(
-    method: string,
-    args: unknown[] = [],
-    stream?: StreamOptions
-  ): Promise<T> => {
+  #call = <T>(method: string, args: unknown[] = [], stream?: StreamOptions): Promise<T> => {
     return new Promise<T>((resolve, reject) => {
       const id = crypto.randomUUID();
       this.#pending.set(id, {
         resolve: resolve as (v: unknown) => void,
         reject,
-        stream
+        stream,
       });
       const req: RPCRequest = {
         type: MessageType.RPC,
         id,
         method,
-        args
+        args,
       };
-      this.socket.send(JSON.stringify(req));
+      try {
+        this.#requireSocket("agent.call()").send(JSON.stringify(req));
+      } catch (error) {
+        this.#pending.delete(id);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   };
 }
 
 export function createAgent<AgentT = unknown, State = unknown>(
-  options: CreateAgentOptions
+  options: CreateAgentOptions,
 ): Agent<AgentT, State> {
   const agent = new Agent<AgentT, State>(options);
+  onMount(() => agent.connect());
   onDestroy(() => agent.close());
   return agent;
 }

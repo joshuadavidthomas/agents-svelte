@@ -134,8 +134,10 @@
     }
 
     const nextAgent = new Agent({ agent: "Inbox", name: DEMO_USER, sub: [{ agent: "Chat", name: id }] });
+    const nextChat = new AgentChat({ agent: nextAgent });
+    nextChat.connect();
     chatAgent = nextAgent;
-    chat = new AgentChat({ agent: nextAgent });
+    chat = nextChat;
   }
 
   function selectChat(id: string) {

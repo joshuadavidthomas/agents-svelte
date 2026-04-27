@@ -72,14 +72,14 @@ For each example:
 
 Current planned mappings:
 
-| Example                   | Closest Cloudflare example                   |
-| ------------------------- | -------------------------------------------- |
-| `examples/basic-chat`     | `cloudflare/agents/examples/ai-chat`         |
-| `examples/multi-ai-chat` | `cloudflare/agents/examples/multi-ai-chat`   |
-| `examples/tool-calls`     | `cloudflare/agents/examples/dynamic-tools`   |
+| Example                      | Closest Cloudflare example                   |
+| ---------------------------- | -------------------------------------------- |
+| `examples/basic-chat`        | `cloudflare/agents/examples/ai-chat`         |
+| `examples/multi-ai-chat`     | `cloudflare/agents/examples/multi-ai-chat`   |
+| `examples/tool-calls`        | `cloudflare/agents/examples/dynamic-tools`   |
 | `examples/human-in-the-loop` | `cloudflare/agents/guides/human-in-the-loop` |
-| `examples/voice-input`    | `cloudflare/agents/examples/voice-input`     |
-| `examples/voice-agent`    | `cloudflare/agents/examples/voice-agent`     |
+| `examples/voice-input`       | `cloudflare/agents/examples/voice-input`     |
+| `examples/voice-agent`       | `cloudflare/agents/examples/voice-agent`     |
 
 ## Parity guidance
 

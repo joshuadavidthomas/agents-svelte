@@ -11,6 +11,6 @@ export function getTestWorkerHost(): {
   const url = new URL(getTestWorkerUrl());
   return {
     host: `${url.hostname}:${url.port}`,
-    protocol: "ws"
+    protocol: "ws",
   };
 }

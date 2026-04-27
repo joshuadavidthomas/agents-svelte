@@ -32,23 +32,22 @@ const { MockPartySocket, resetSockets } = vi.hoisted(() => {
     MockPartySocket,
     resetSockets: () => {
       MockPartySocket.instances.length = 0;
-    }
+    },
   };
 });
 
 vi.mock("partysocket", () => ({
   default: MockPartySocket,
-  PartySocket: MockPartySocket
+  PartySocket: MockPartySocket,
 }));
 
 import { Agent, type CreateAgentOptions } from "../agent.svelte.ts";
 
 const cleanups: Array<() => void> = [];
 
-function makeAgent<State = unknown>(
-  options: CreateAgentOptions
-): Agent<unknown, State> {
+function makeAgent<State = unknown>(options: CreateAgentOptions): Agent<unknown, State> {
   const agent = new Agent<unknown, State>(options);
+  agent.connect();
   cleanups.push(() => agent.close());
   return agent;
 }
@@ -64,8 +63,8 @@ function latestSocket(): InstanceType<typeof MockPartySocket> {
 function dispatchMessage(socket: EventTarget, data: unknown) {
   socket.dispatchEvent(
     new MessageEvent("message", {
-      data: typeof data === "string" ? data : JSON.stringify(data)
-    })
+      data: typeof data === "string" ? data : JSON.stringify(data),
+    }),
   );
 }
 
@@ -89,39 +88,39 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     const agent = makeAgent({
       agent: "TestStateAgent",
       host: "localhost:8787",
-      protocol: "ws"
+      protocol: "ws",
     });
     const socket = latestSocket();
 
     dispatchMessage(socket, {
       type: MessageType.CF_AGENT_IDENTITY,
       name: "first-room",
-      agent: "test-state-agent"
+      agent: "test-state-agent",
     });
 
     dispatchMessage(socket, {
       type: MessageType.CF_AGENT_IDENTITY,
       name: "second-room",
-      agent: "other-agent"
+      agent: "other-agent",
     });
 
     expect(agent.lastIdentityChange).toEqual({
       oldIdentity: {
         name: "first-room",
         agent: "test-state-agent",
-        identified: true
+        identified: true,
       },
       newIdentity: {
         name: "second-room",
         agent: "other-agent",
-        identified: true
+        identified: true,
       },
-      seq: 1
+      seq: 1,
     });
     expect(agent.identity).toEqual({
       name: "second-room",
       agent: "other-agent",
-      identified: true
+      identified: true,
     });
   });
 
@@ -130,14 +129,12 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
       agent: "TestStateAgent",
       name: "session-1",
       host: "example.com",
-      path: "rpc"
+      path: "rpc",
     });
     const socket = latestSocket();
     delete (socket as { _pkurl?: string })._pkurl;
 
-    expect(agent.getHttpUrl()).toBe(
-      "https://example.com/agents/test-state-agent/session-1/rpc"
-    );
+    expect(agent.getHttpUrl()).toBe("https://example.com/agents/test-state-agent/session-1/rpc");
   });
 
   it("builds basePath HTTP URLs without reading PartySocket private fields", () => {
@@ -145,28 +142,26 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
       agent: "TestStateAgent",
       host: "localhost:8787",
       protocol: "ws",
-      basePath: "custom-state/session-1"
+      basePath: "custom-state/session-1",
     });
     const socket = latestSocket();
     delete (socket as { _pkurl?: string })._pkurl;
 
-    expect(agent.getHttpUrl()).toBe(
-      "http://localhost:8787/custom-state/session-1"
-    );
+    expect(agent.getHttpUrl()).toBe("http://localhost:8787/custom-state/session-1");
   });
 
   it("marks identity un-identified on close", () => {
     const agent = makeAgent({
       agent: "TestStateAgent",
       host: "localhost:8787",
-      protocol: "ws"
+      protocol: "ws",
     });
     const socket = latestSocket();
 
     dispatchMessage(socket, {
       type: MessageType.CF_AGENT_IDENTITY,
       name: "room-1",
-      agent: "test-state-agent"
+      agent: "test-state-agent",
     });
     socket.dispatchEvent(new CloseEvent("close"));
 
@@ -178,13 +173,55 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     const agent = makeAgent({
       agent: "TestCallableAgent",
       host: "localhost:8787",
-      protocol: "ws"
+      protocol: "ws",
     });
     const socket = latestSocket();
 
     const pending = agent.call("add", [1, 2]);
     socket.dispatchEvent(new CloseEvent("close"));
 
+    await expect(pending).rejects.toThrow("Connection closed");
+  });
+
+  it("keeps the socket reference across transient close events for PartySocket reconnects", async () => {
+    const agent = makeAgent({
+      agent: "TestCallableAgent",
+      host: "localhost:8787",
+      protocol: "ws",
+    });
+    const socket = latestSocket();
+
+    const pending = agent.call("beforeReconnect", []);
+    socket.dispatchEvent(new CloseEvent("close"));
+    await expect(pending).rejects.toThrow("Connection closed");
+
+    socket.dispatchEvent(new Event("open"));
+    agent.setState({ reconnected: true });
+
+    expect(agent.connected).toBe(true);
+    expect(socket.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears connection state and rejects pending RPCs on explicit close", async () => {
+    const agent = makeAgent({
+      agent: "TestCallableAgent",
+      host: "localhost:8787",
+      protocol: "ws",
+    });
+    const socket = latestSocket();
+
+    dispatchMessage(socket, {
+      type: MessageType.CF_AGENT_IDENTITY,
+      name: "room-1",
+      agent: "test-callable-agent",
+    });
+    socket.dispatchEvent(new Event("open"));
+    const pending = agent.call("add", [1, 2]);
+
+    agent.close();
+
+    expect(agent.connected).toBe(false);
+    expect(agent.identity.identified).toBe(false);
     await expect(pending).rejects.toThrow("Connection closed");
   });
 });

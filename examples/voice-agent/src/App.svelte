@@ -55,8 +55,9 @@
   const sessionShortId = sessionId.slice(0, 8);
 
   // This example uses an explicit controller because changing the model query
-  // requires replacing the voice connection. Use createVoiceAgent(...) for
-  // one-shot component setup where options do not change.
+  // requires replacing the voice connection. Explicit controllers must be
+  // connected manually; use createVoiceAgent(...) for one-shot component setup
+  // where options do not change.
   let voice = $state.raw(createVoiceController());
 
   function createVoiceController(): VoiceAgent {
@@ -79,6 +80,7 @@
     voice.close();
     sfuAudioInput?.stop();
     voice = createVoiceController();
+    voice.connect();
   }
 
   function setTransport(mode: VoiceTransportMode) {
@@ -109,6 +111,7 @@
   const audioLevelWidth = $derived(`${Math.min(voice.audioLevel * 500, 100)}%`);
 
   onMount(() => {
+    voice.connect();
     fetch("/sfu/config")
       .then((response) => response.json() as Promise<{ enabled: boolean }>)
       .then((config) => {

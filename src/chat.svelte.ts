@@ -1,9 +1,6 @@
-import { onDestroy } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import { Chat } from "@ai-sdk/svelte";
-import {
-  AgentChatTransport,
-  type AgentChatTransportEvent
-} from "./chat-transport.ts";
+import { AgentChatTransport, type AgentChatTransportEvent } from "./chat-transport.ts";
 import { broadcastTransition, type BroadcastStreamState } from "agents/chat";
 import { isToolUIPart, getToolName, type ChatInit, type UIMessage } from "ai";
 import { nanoid } from "nanoid";
@@ -66,15 +63,12 @@ export class AgentChatToolCall {
     this.#addOutput({
       toolCallId: this.toolCallId,
       messageId: this.messageId,
-      ...opts
+      ...opts,
     });
   }
 
   async run(
-    handler: (
-      input: unknown,
-      toolCall: AgentChatToolCall
-    ) => unknown | Promise<unknown>
+    handler: (input: unknown, toolCall: AgentChatToolCall) => unknown | Promise<unknown>,
   ): Promise<void> {
     if (this.handled) {
       return;
@@ -95,13 +89,12 @@ export class AgentChatToolCall {
         }
       })
       .catch((error) => {
-        const normalized =
-          error instanceof Error ? error : new Error(String(error));
+        const normalized = error instanceof Error ? error : new Error(String(error));
         this.lastError = normalized;
         if (!this.handled) {
           this.addOutput({
             state: "output-error",
-            errorText: normalized.message
+            errorText: normalized.message,
           });
         }
       })
@@ -114,21 +107,21 @@ export class AgentChatToolCall {
   }
 }
 
-export type PrepareSendMessagesRequestOptions<M extends UIMessage = UIMessage> =
-  {
-    id: string;
-    messages: M[];
-    trigger: "submit-message" | "regenerate-message";
-    messageId?: string;
-  };
+export type PrepareSendMessagesRequestOptions<M extends UIMessage = UIMessage> = {
+  id: string;
+  messages: M[];
+  trigger: "submit-message" | "regenerate-message";
+  messageId?: string;
+};
 
 export type PrepareSendMessagesRequestResult = {
   body?: Record<string, unknown>;
 };
 
-export interface CreateAgentChatOptions<
-  M extends UIMessage = UIMessage
-> extends Omit<ChatInit<M>, "transport" | "onToolCall" | "id" | "messages"> {
+export interface CreateAgentChatOptions<M extends UIMessage = UIMessage> extends Omit<
+  ChatInit<M>,
+  "transport" | "onToolCall" | "id" | "messages"
+> {
   agent: Agent<unknown, unknown>;
   /**
    * Initial messages. If omitted, messages are fetched from
@@ -144,10 +137,8 @@ export interface CreateAgentChatOptions<
     | Record<string, unknown>
     | (() => Record<string, unknown> | Promise<Record<string, unknown>>);
   prepareSendMessagesRequest?: (
-    options: PrepareSendMessagesRequestOptions<M>
-  ) =>
-    | PrepareSendMessagesRequestResult
-    | Promise<PrepareSendMessagesRequestResult>;
+    options: PrepareSendMessagesRequestOptions<M>,
+  ) => PrepareSendMessagesRequestResult | Promise<PrepareSendMessagesRequestResult>;
   /**
    * Server auto-continues after tool results/approvals (default true).
    * When false, call `sendMessage()` to continue.
@@ -170,7 +161,7 @@ export async function getAgentMessages<M extends UIMessage = UIMessage>(
         url: string;
         credentials?: RequestCredentials;
         headers?: HeadersInit;
-      }
+      },
 ): Promise<M[]> {
   let url: string;
   if ("url" in options) {
@@ -183,7 +174,7 @@ export async function getAgentMessages<M extends UIMessage = UIMessage>(
   try {
     const r = await fetch(url, {
       credentials: options.credentials,
-      headers: options.headers
+      headers: options.headers,
     });
     if (!r.ok) return [];
     const text = await r.text();
@@ -214,6 +205,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     return this.#pendingToolCalls;
   }
 
+  readonly #options: CreateAgentChatOptions<M>;
   readonly #autoContinueAfterToolResult: boolean;
   readonly #sendAutomaticallyWhen?: ChatInit<M>["sendAutomaticallyWhen"];
   readonly #toolCalls = new Map<string, AgentChatToolCall>();
@@ -221,13 +213,15 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     assistantId: string;
     anchorMessageId: string | null;
   } | null = null;
+  #connected = false;
+  #ownsAgentConnection = false;
   #closed = false;
   readonly #continuationStreamsSeeded = new Set<string>();
   #clientContinuationPromise: Promise<void> | null = null;
   #clientContinuationRequested = false;
   #cleanupPendingToolCallsEffect: (() => void) | null = null;
   readonly #streamState: { current: BroadcastStreamState } = {
-    current: { status: "idle" } as BroadcastStreamState
+    current: { status: "idle" } as BroadcastStreamState,
   };
 
   constructor(options: CreateAgentChatOptions<M>) {
@@ -235,43 +229,34 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       agent,
       getInitialMessages,
       initialMessages,
-      credentials,
-      headers,
       body: bodyOption,
       prepareSendMessagesRequest,
       autoContinueAfterToolResult = true,
       sendAutomaticallyWhen,
-      resume = true,
       ...chatInit
     } = options;
 
-    const agentUrl = new URL(agent.getHttpUrl());
-    agentUrl.searchParams.delete("_pk");
-    const agentUrlString = agentUrl.toString();
-    const cacheKey = `${agentUrl.origin}${agentUrl.pathname}|${agent.identity.agent}|${agent.identity.name}`;
-
-    const initialPromise: Promise<M[]> =
-      getInitialMessages === null
-        ? Promise.resolve(initialMessages ?? [])
-        : getInitialMessages
-          ? getInitialMessages({
-              agent: agent.identity.agent,
-              name: agent.identity.name,
-              url: agentUrlString
-            })
-          : getAgentMessages<M>({
-              url: `${agentUrlString.replace(/\/$/, "")}/get-messages`,
-              credentials,
-              headers
-            });
+    const cacheKey = `${agent.path
+      .map((segment) => `${segment.agent}/${segment.name}`)
+      .join("/")}|${agent.identity.agent}|${agent.identity.name}`;
 
     const transport = new AgentChatTransport<M>({
-      connection: agent.socket,
+      getConnection: () => {
+        const socket = agent.socket;
+        return socket
+          ? {
+              send: (data: string) => socket.send(data),
+              addEventListener: (type: string, listener: (event: MessageEvent) => void) =>
+                socket.addEventListener(type, listener as EventListener),
+              removeEventListener: (type: string, listener: (event: MessageEvent) => void) =>
+                socket.removeEventListener(type, listener as EventListener),
+            }
+          : null;
+      },
       prepareBody: async ({ messages: msgs, trigger, messageId }) => {
         let extra: Record<string, unknown> = {};
         if (bodyOption) {
-          const resolved =
-            typeof bodyOption === "function" ? await bodyOption() : bodyOption;
+          const resolved = typeof bodyOption === "function" ? await bodyOption() : bodyOption;
           extra = { ...resolved };
         }
         if (prepareSendMessagesRequest) {
@@ -279,12 +264,12 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
             id: cacheKey,
             messages: msgs,
             trigger,
-            messageId
+            messageId,
           });
           if (result.body) Object.assign(extra, result.body);
         }
         return extra;
-      }
+      },
     });
 
     super({
@@ -292,7 +277,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       id: cacheKey,
       transport,
       messages: initialMessages ?? [],
-      sendAutomaticallyWhen
+      sendAutomaticallyWhen,
     });
 
     // @ai-sdk/svelte installs these as instance fields in its constructor.
@@ -301,11 +286,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     delete (this as unknown as { addToolOutput?: unknown }).addToolOutput;
     delete (this as unknown as { addToolResult?: unknown }).addToolResult;
 
+    this.#options = options;
     this.#transport = transport;
-    transport.start({
-      onEvent: (event) => this.#handleTransportEvent(event),
-      shouldAcceptBroadcastResume: () => resume && !this.#closed
-    });
     this.#autoContinueAfterToolResult = autoContinueAfterToolResult;
     this.#sendAutomaticallyWhen = sendAutomaticallyWhen;
 
@@ -318,9 +300,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       }
     }) as Chat<M>["stop"];
 
-    const baseSendMessage = this.sendMessage.bind(
-      this
-    ) as Chat<M>["sendMessage"];
+    const baseSendMessage = this.sendMessage.bind(this) as Chat<M>["sendMessage"];
     this.sendMessage = (async (message, requestOptions) => {
       if (this.#closed) {
         return;
@@ -343,33 +323,81 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       return request;
     }) as Chat<M>["sendMessage"];
 
-    initialPromise
-      .then((msgs) => {
-        if (this.#closed) {
-          return;
-        }
-        if (msgs.length > 0 && this.messages.length === 0) {
-          this.messages = msgs;
-        }
-        this.initialLoadError = null;
-        this.initialized = true;
-        if (resume) {
-          void this.resumeStream().catch(() => {});
-        }
-      })
-      .catch((e) => {
-        if (this.#closed) {
-          return;
-        }
-        this.initialLoadError = e instanceof Error ? e : new Error(String(e));
-        this.initialized = true;
-      });
+    if (getInitialMessages === null || initialMessages) {
+      this.initialized = true;
+    }
 
     this.#cleanupPendingToolCallsEffect = $effect.root(() => {
       $effect(() => {
         this.#syncPendingToolCalls();
       });
     });
+  }
+
+  connect(): void {
+    if (this.#closed || this.#connected) return;
+
+    const {
+      agent,
+      getInitialMessages,
+      initialMessages,
+      credentials,
+      headers,
+      resume = true,
+    } = this.#options;
+
+    const agentWasConnected = agent.socket !== null;
+
+    try {
+      this.#ownsAgentConnection = !agentWasConnected;
+      agent.connect();
+      const agentUrl = new URL(agent.getHttpUrl());
+      agentUrl.searchParams.delete("_pk");
+      const agentUrlString = agentUrl.toString();
+
+      this.#transport.start({
+        onEvent: (event) => this.#handleTransportEvent(event),
+        shouldAcceptBroadcastResume: () => resume && !this.#closed,
+      });
+      this.#connected = true;
+
+      const initialPromise: Promise<M[]> =
+        getInitialMessages === null
+          ? Promise.resolve(initialMessages ?? [])
+          : getInitialMessages
+            ? getInitialMessages({
+                agent: agent.identity.agent,
+                name: agent.identity.name,
+                url: agentUrlString,
+              })
+            : getAgentMessages<M>({
+                url: `${agentUrlString.replace(/\/$/, "")}/get-messages`,
+                credentials,
+                headers,
+              });
+
+      initialPromise
+        .then((msgs) => {
+          if (this.#closed) return;
+          if (msgs.length > 0 && this.messages.length === 0) this.messages = msgs;
+          this.initialLoadError = null;
+          this.initialized = true;
+          if (resume) void this.resumeStream().catch(() => {});
+        })
+        .catch((e) => {
+          if (this.#closed) return;
+          this.initialLoadError = e instanceof Error ? e : new Error(String(e));
+          this.initialized = true;
+        });
+    } catch (error) {
+      this.#connected = false;
+      this.#transport.close();
+      if (this.#ownsAgentConnection) {
+        agent.close();
+        this.#ownsAgentConnection = false;
+      }
+      throw error;
+    }
   }
 
   override addToolApprovalResponse = (opts: {
@@ -384,11 +412,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     let toolCallId: string | undefined;
     for (let i = this.messages.length - 1; i >= 0; i--) {
       for (const p of this.messages[i].parts) {
-        if (
-          isToolUIPart(p) &&
-          p.state === "approval-requested" &&
-          p.approval.id === opts.id
-        ) {
+        if (isToolUIPart(p) && p.state === "approval-requested" && p.approval.id === opts.id) {
           toolCallId = p.toolCallId;
           break;
         }
@@ -400,7 +424,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       this.#transport.sendToolApproval({
         toolCallId,
         approved: opts.approved,
-        autoContinue: this.#autoContinueAfterToolResult
+        autoContinue: this.#autoContinueAfterToolResult,
       });
       if (this.#autoContinueAfterToolResult) {
         this.#startToolContinuation();
@@ -410,11 +434,11 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         message.parts.some((part) => {
           const approval = (part as { approval?: { id: string } }).approval;
           return approval?.id === opts.id;
-        })
+        }),
       );
       if (!knownApproval) {
         console.warn(
-          `[cloudflare-agents-svelte/chat] addToolApprovalResponse: no toolCallId for approval id "${opts.id}". Server will not be notified.`
+          `[cloudflare-agents-svelte/chat] addToolApprovalResponse: no toolCallId for approval id "${opts.id}". Server will not be notified.`,
         );
       }
       return;
@@ -422,10 +446,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     void this.#continueFromClientWhenConfigured().catch(() => {});
   };
 
-  setMessages(
-    next: M[] | ((prev: M[]) => M[]),
-    options?: { skipServerSync?: boolean }
-  ): void {
+  setMessages(next: M[] | ((prev: M[]) => M[]), options?: { skipServerSync?: boolean }): void {
     const resolved = typeof next === "function" ? next(this.messages) : next;
     const messages = this.#preserveProtectedStreamingAssistant(resolved);
     this.messages = messages;
@@ -456,6 +477,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#resetLocalTransientState();
     this.#resetStreamState();
     this.#transport.close();
+    if (this.#ownsAgentConnection) {
+      this.#options.agent.close();
+      this.#ownsAgentConnection = false;
+    }
   }
 
   #resetLocalTransientState(): void {
@@ -487,15 +512,14 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
     this.#clientContinuationRequested = true;
     if (!this.#clientContinuationPromise) {
-      this.#clientContinuationPromise =
-        this.#drainClientContinuationRequests().finally(() => {
-          this.#clientContinuationPromise = null;
-          // A request can arrive after the drain loop's final check but before
-          // this promise clears. Re-enter so that request is not stranded.
-          if (this.#clientContinuationRequested) {
-            void this.#continueFromClientWhenConfigured().catch(() => {});
-          }
-        });
+      this.#clientContinuationPromise = this.#drainClientContinuationRequests().finally(() => {
+        this.#clientContinuationPromise = null;
+        // A request can arrive after the drain loop's final check but before
+        // this promise clears. Re-enter so that request is not stranded.
+        if (this.#clientContinuationRequested) {
+          void this.#continueFromClientWhenConfigured().catch(() => {});
+        }
+      });
     }
 
     return this.#clientContinuationPromise;
@@ -520,7 +544,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
 
     const shouldSend = await this.#sendAutomaticallyWhen({
-      messages: this.messages
+      messages: this.messages,
     });
     // TypeScript narrows status after the earlier guard, but it can change
     // while `sendAutomaticallyWhen` awaits.
@@ -555,10 +579,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     const pendingToolCalls: AgentChatToolCall[] = [];
 
     for (const part of last.parts) {
-      if (
-        !isToolUIPart(part) ||
-        (part as { state?: string }).state !== "input-available"
-      ) {
+      if (!isToolUIPart(part) || (part as { state?: string }).state !== "input-available") {
         continue;
       }
 
@@ -590,19 +611,17 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
             messageId: opts.messageId,
             output: opts.output,
             ...(opts.state ? { state: opts.state } : {}),
-            ...(opts.errorText !== undefined
-              ? { errorText: opts.errorText }
-              : {})
+            ...(opts.errorText !== undefined ? { errorText: opts.errorText } : {}),
           });
           this.#sendToolOutputToServer(
             opts.toolCallId,
             toolName,
             opts.output,
             opts.state,
-            opts.errorText
+            opts.errorText,
           );
           void this.#continueFromClientWhenConfigured().catch(() => {});
-        }
+        },
       });
       this.#toolCalls.set(toolCallId, toolCall);
       pendingToolCalls.push(toolCall);
@@ -632,7 +651,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
     return [
       ...messages.filter((message) => message.id !== protection.assistantId),
-      protectedAssistant
+      protectedAssistant,
     ];
   }
 
@@ -652,7 +671,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
     this.#protectedStreamingAssistant = {
       assistantId: last.id,
-      anchorMessageId: this.messages.at(-2)?.id ?? null
+      anchorMessageId: this.messages.at(-2)?.id ?? null,
     };
   }
 
@@ -672,12 +691,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       return;
     }
 
-    if (
-      this.#protectedStreamingAssistant?.assistantId !== assistantMessage.id
-    ) {
+    if (this.#protectedStreamingAssistant?.assistantId !== assistantMessage.id) {
       this.#protectedStreamingAssistant = {
         assistantId: assistantMessage.id,
-        anchorMessageId: this.messages[assistantIndex - 1]?.id ?? null
+        anchorMessageId: this.messages[assistantIndex - 1]?.id ?? null,
       };
     }
 
@@ -692,19 +709,13 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
   #restoreProtectedStreamingAssistant(assistantId?: string): void {
     const protection = this.#protectedStreamingAssistant;
-    if (
-      !protection ||
-      assistantId === undefined ||
-      protection.assistantId !== assistantId
-    ) {
+    if (!protection || assistantId === undefined || protection.assistantId !== assistantId) {
       return;
     }
 
     this.#protectedStreamingAssistant = null;
 
-    const sourceIndex = this.messages.findIndex(
-      (message) => message.id === protection.assistantId
-    );
+    const sourceIndex = this.messages.findIndex((message) => message.id === protection.assistantId);
     if (sourceIndex < 0) {
       return;
     }
@@ -719,13 +730,9 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       result.unshift(message);
     } else {
       const anchorIndex = result.findIndex(
-        (candidate) => candidate.id === protection.anchorMessageId
+        (candidate) => candidate.id === protection.anchorMessageId,
       );
-      result.splice(
-        anchorIndex >= 0 ? anchorIndex + 1 : sourceIndex,
-        0,
-        message
-      );
+      result.splice(anchorIndex >= 0 ? anchorIndex + 1 : sourceIndex, 0, message);
     }
 
     this.messages = result;
@@ -755,7 +762,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     const next = [...this.messages];
     next[assistantIndex] = {
       ...assistant,
-      parts: [...assistant.parts, repair.part]
+      parts: [...assistant.parts, repair.part],
     };
     return next;
   }
@@ -777,8 +784,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         part: {
           type: "text",
           text: "",
-          state: "streaming"
-        } as M["parts"][number]
+          state: "streaming",
+        } as M["parts"][number],
       };
     }
     if (chunk.type === "reasoning-delta") {
@@ -787,8 +794,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         part: {
           type: "reasoning",
           text: "",
-          state: "streaming"
-        } as M["parts"][number]
+          state: "streaming",
+        } as M["parts"][number],
       };
     }
 
@@ -806,7 +813,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
   #updateMessageParts(
     matchesMessage: (message: M) => boolean,
-    updatePart: (part: M["parts"][number]) => M["parts"][number]
+    updatePart: (part: M["parts"][number]) => M["parts"][number],
   ): void {
     let changed = false;
     const next = this.messages.map((message) => {
@@ -844,50 +851,40 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
 
     const state = opts.state ?? "output-available";
-    const hasMessageId = this.messages.some(
-      (message) => message.id === opts.messageId
-    );
+    const hasMessageId = this.messages.some((message) => message.id === opts.messageId);
     this.#updateMessageParts(
       (message) =>
         message.id === opts.messageId ||
         (!hasMessageId &&
-          message.parts.some(
-            (part) => isToolUIPart(part) && part.toolCallId === opts.toolCallId
-          )),
+          message.parts.some((part) => isToolUIPart(part) && part.toolCallId === opts.toolCallId)),
       (part) =>
         isToolUIPart(part) && part.toolCallId === opts.toolCallId
           ? { ...part, state, output: opts.output, errorText: opts.errorText }
-          : part
+          : part,
     );
   }
 
-  #applyToolApprovalLocally(opts: {
-    id: string;
-    approved: boolean;
-    reason?: string;
-  }): void {
+  #applyToolApprovalLocally(opts: { id: string; approved: boolean; reason?: string }): void {
     this.#updateMessageParts(
       (message) =>
         message.parts.some(
           (part) =>
             isToolUIPart(part) &&
             part.state === "approval-requested" &&
-            part.approval.id === opts.id
+            part.approval.id === opts.id,
         ),
       (part) =>
-        isToolUIPart(part) &&
-        part.state === "approval-requested" &&
-        part.approval.id === opts.id
+        isToolUIPart(part) && part.state === "approval-requested" && part.approval.id === opts.id
           ? {
               ...part,
               state: "approval-responded",
               approval: {
                 id: opts.id,
                 approved: opts.approved,
-                reason: opts.reason
-              }
+                reason: opts.reason,
+              },
             }
-          : part
+          : part,
     );
   }
 
@@ -896,14 +893,13 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     toolName: string,
     output: unknown,
     state?: "output-available" | "output-error",
-    errorText?: string
+    errorText?: string,
   ): void {
     if (this.#closed) {
       return;
     }
 
-    const shouldAutoContinue =
-      state === "output-error" ? false : this.#autoContinueAfterToolResult;
+    const shouldAutoContinue = state === "output-error" ? false : this.#autoContinueAfterToolResult;
 
     this.#transport.sendToolResult({
       toolCallId,
@@ -911,7 +907,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       output,
       ...(state ? { state } : {}),
       ...(errorText !== undefined ? { errorText } : {}),
-      autoContinue: shouldAutoContinue
+      autoContinue: shouldAutoContinue,
     });
     if (shouldAutoContinue) {
       this.#startToolContinuation();
@@ -926,18 +922,15 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     switch (event.type) {
       case "history-cleared":
         this.#resetLocalTransientState();
-        this.#streamState.current = broadcastTransition(
-          this.#streamState.current,
-          { type: "clear" }
-        ).state;
+        this.#streamState.current = broadcastTransition(this.#streamState.current, {
+          type: "clear",
+        }).state;
         this.isServerStreaming = false;
         this.messages = [];
         break;
 
       case "messages-replaced":
-        this.messages = this.#preserveProtectedStreamingAssistant(
-          event.messages
-        );
+        this.messages = this.#preserveProtectedStreamingAssistant(event.messages);
         break;
 
       case "message-updated": {
@@ -952,15 +945,13 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           const ids = new Set(
             updated.parts
               .filter((p) => "toolCallId" in p && p.toolCallId)
-              .map((p) => (p as { toolCallId: string }).toolCallId)
+              .map((p) => (p as { toolCallId: string }).toolCallId),
           );
           if (ids.size > 0) {
             idx = prev.findIndex((m) =>
               m.parts.some(
-                (p) =>
-                  "toolCallId" in p &&
-                  ids.has((p as { toolCallId: string }).toolCallId)
-              )
+                (p) => "toolCallId" in p && ids.has((p as { toolCallId: string }).toolCallId),
+              ),
             );
           }
         }
@@ -973,14 +964,11 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       }
 
       case "broadcast-resume":
-        this.#streamState.current = broadcastTransition(
-          this.#streamState.current,
-          {
-            type: "resume-fallback",
-            streamId: event.streamId,
-            messageId: nanoid()
-          }
-        ).state;
+        this.#streamState.current = broadcastTransition(this.#streamState.current, {
+          type: "resume-fallback",
+          streamId: event.streamId,
+          messageId: nanoid(),
+        }).state;
         this.isServerStreaming = true;
         break;
 
@@ -1002,13 +990,11 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           continuation: event.continuation,
           currentMessages: event.continuation
             ? this.#messagesForContinuation(event.chunkData)
-            : undefined
+            : undefined,
         });
         this.#streamState.current = result.state;
         if (result.messagesUpdate) {
-          const updater = result.messagesUpdate as unknown as (
-            prev: M[]
-          ) => M[];
+          const updater = result.messagesUpdate as unknown as (prev: M[]) => M[];
           this.messages = updater(this.messages);
         }
         this.isServerStreaming = result.isStreaming;
@@ -1026,9 +1012,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 }
 
 export function createAgentChat<M extends UIMessage = UIMessage>(
-  options: CreateAgentChatOptions<M>
+  options: CreateAgentChatOptions<M>,
 ): AgentChat<M> {
   const chat = new AgentChat<M>(options);
+  onMount(() => chat.connect());
   onDestroy(() => chat.close());
   return chat;
 }

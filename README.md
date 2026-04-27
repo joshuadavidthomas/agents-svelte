@@ -54,15 +54,18 @@ Use the factory in components:
 const agent = createAgent({ agent: "ChatAgent" });
 ```
 
-The factory registers `onDestroy(() => instance.close())` and must be called during component init.
+Factories return real reactive controllers immediately, but they defer sockets, HTTP fetches, voice transports, and browser APIs until Svelte runs `onMount(...)`. They also register `onDestroy(() => instance.close())`, so they must be called during component init.
 
 Use the class directly outside component init or when you want explicit lifetime control:
 
 ```ts
 const agent = new Agent({ agent: "ChatAgent" });
+agent.connect();
 // later
 agent.close();
 ```
+
+Class constructors are inert. Direct class users must call `.connect()` before using operations that require a connection, and `.close()` when the controller is no longer needed.
 
 ## `createAgent` / `Agent`
 
@@ -101,6 +104,7 @@ Methods:
 - `agent.call(method, args?, streamOptions?)`
 - `agent.stub` for typed RPC
 - `agent.getHttpUrl()`
+- `agent.connect()`
 - `agent.close()`
 
 ### Notes
@@ -108,7 +112,8 @@ Methods:
 - There is no top-level `agent.identified` field anymore. Use `agent.identity.identified`.
 - The primary readiness signal is `agent.identity.identified`, not a promise.
 - State and identity transitions are exposed as reactive fields (`lastStateUpdate`, `lastIdentityChange`) instead of constructor callbacks.
-- For raw socket events, use `agent.socket.addEventListener(...)` directly.
+- `agent.socket` is `PartySocket | null`: it is `null` before `.connect()` and after explicit `.close()`. Transient socket close events keep the socket reference so PartySocket can reconnect.
+- For raw socket events, check `agent.socket` after mount or after explicit `.connect()` and attach listeners to the returned `PartySocket`.
 
 ## `createAgentChat` / `AgentChat`
 
@@ -161,7 +166,7 @@ Wraps `@ai-sdk/svelte`'s `Chat` class with the Cloudflare Agents WebSocket trans
 </form>
 ```
 
-`AgentChat` extends `@ai-sdk/svelte`'s `Chat`, so you read the normal chat API directly from the instance.
+`AgentChat` extends `@ai-sdk/svelte`'s `Chat`, so you read the normal chat API directly from the instance. When `AgentChat.connect()` receives an already-connected `Agent`, it leaves that Agent open on `chat.close()`. When the chat opens a direct `new Agent(...)` itself, the chat owns and closes that Agent connection.
 
 Reactive fields:
 
@@ -183,7 +188,8 @@ Methods:
 - `chat.addToolApprovalResponse({ id, approved, reason? })`
 - `chat.setMessages(next, { skipServerSync? })`
 - `chat.clearHistory()`
-- `chat.close()` — disposes listeners/effects, stops active streams, and makes retained tool-call handles no-op.
+- `chat.connect()`
+- `chat.close()` — disposes listeners/effects, stops active streams, closes an Agent connection that the chat opened, and makes retained tool-call handles no-op.
 
 Pending tool call handles (`chat.pendingToolCalls`) expose:
 
@@ -297,6 +303,7 @@ Methods:
 - `voice.toggleMute()`
 - `voice.sendText(text)`
 - `voice.sendJSON(data)`
+- `voice.connect()`
 - `voice.close()`
 
 ## `createVoiceInput` / `VoiceInput`
@@ -331,19 +338,16 @@ Methods:
 - `input.stop()`
 - `input.toggleMute()`
 - `input.clear()`
+- `input.connect()`
 - `input.close()`
 
 ## SvelteKit usage
 
-`Agent`, `AgentChat`, `VoiceAgent`, and `VoiceInput` are client-side controllers. Create them in browser-only component code, not in `+page.server.ts`, `+layout.server.ts`, or shared module code that runs during SSR.
+`Agent`, `AgentChat`, `VoiceAgent`, and `VoiceInput` are component-scoped client controllers with SSR-safe constructors. You can create them during SvelteKit component setup; factories will not open sockets, fetch chat history, start voice transports, or touch browser-only APIs until `onMount(...)`.
 
-For SvelteKit pages, prefer one of these patterns:
+Do not create long-lived controllers in `+page.server.ts`, `+layout.server.ts`, or shared module scope. Server load functions should return serializable data, and components should create the controller for the browser session.
 
-- create the controller in a client-only child component
-- guard construction with SvelteKit's `browser` value
-- intentionally disable SSR for a route that is fully client-driven
-
-You can still load initial chat history with SvelteKit `load` and pass it into the client controller:
+You can load initial chat history with SvelteKit `load` and pass it into the client controller:
 
 ```svelte
 <script lang="ts">
@@ -363,10 +367,27 @@ You can still load initial chat history with SvelteKit `load` and pass it into t
 
 Tool handlers that use browser APIs such as geolocation, camera, files, or clipboard belong in component `$effect(...)` blocks or user event handlers.
 
+If you use classes directly in SvelteKit components, connect them from browser-only lifecycle code:
+
+```svelte
+<script lang="ts">
+  import { onDestroy, onMount } from "svelte";
+  import { Agent } from "@joshthomas/cloudflare-agents-svelte";
+
+  const agent = new Agent({ agent: "ChatAgent" });
+
+  onMount(() => agent.connect());
+  onDestroy(() => agent.close());
+</script>
+```
+
+`agent.getHttpUrl()` and explicit `.connect()` still need a host when called outside the browser. Pass `host` if you intentionally call them from non-browser code.
+
 ## What's intentionally different from the React versions
 
 - **No Suspense / `use()` semantics for initial messages.** `AgentChat` exposes reactive `initialized` / `initialLoadError` state instead.
 - **No automatic socket reconnect on option change.** Recreate the controller when connection options change.
+- **Chat IDs are connection-option based, not socket-URL based.** `AgentChat` builds its underlying AI SDK `Chat.id` from the Agent route so chat construction is SSR-safe before a socket exists.
 - **Deprecated chat options dropped.** `toolsRequiringConfirmation`, `experimental_automaticToolResolution`, deprecated client-side `tools`/`AITool` config, and `addToolResult` are not ported.
 - **No hook-shaped callback API for durable state or tool-call routing.** In Svelte you read reactive fields and observe them with `$effect(...)`.
 - **No chat-level tool-output mutation API.** Resolve tool calls through the `AgentChatToolCall` handle from `chat.pendingToolCalls`.
