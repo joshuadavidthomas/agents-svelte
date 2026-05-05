@@ -132,6 +132,8 @@ Reactive fields:
 - `agent.state`
 - `agent.identity` — `{ name, agent, identified }`
 - `agent.connected`
+- `agent.queryStatus` — `"idle" | "loading" | "ready" | "error"`
+- `agent.queryError`
 - `agent.stateError`
 - `agent.mcp`
 - `agent.lastStateUpdate` — `{ state, source, seq } | null`
@@ -143,6 +145,7 @@ Methods:
 - `agent.call(method, args?, streamOptions?)`
 - `agent.stub` for typed RPC
 - `agent.getHttpUrl()`
+- `agent.refreshQuery()`
 - `agent.connect()`
 - `agent.close()`
 
@@ -152,6 +155,29 @@ Notes:
 - State and identity transitions are reactive fields, not constructor callbacks.
 - `agent.socket` is `PartySocket | null`. It is `null` before `.connect()` and after explicit `.close()`.
 - Passing `agent: "ChatAgent"` is normalized to the route segment `chat-agent`.
+
+### Async query params
+
+Use `query` for connection params such as short-lived auth tokens:
+
+```svelte
+<script lang="ts">
+  const agent = createAgent({
+    agent: "ChatAgent",
+    query: async () => {
+      const userId = session.userId; // read reactive inputs before the first await
+      const token = await getToken(userId);
+      return { token };
+    }
+  });
+</script>
+
+{#if agent.queryStatus === "error"}
+  <p>Could not prepare the Agent connection: {agent.queryError?.message}</p>
+{/if}
+```
+
+For async query functions, `Agent` waits for the query to resolve before opening the socket, caches concurrent resolutions for five minutes by default, and refreshes query params after disconnects so reconnects do not reuse stale tokens. Set `cacheTtl` to change the cache lifetime. Call `agent.refreshQuery()` when an external auth source changes outside Svelte reactivity.
 
 ## `createAgentChat` / `AgentChat`
 
@@ -201,7 +227,7 @@ Methods:
 - `chat.regenerate(...)`
 - `chat.resumeStream(...)`
 - `chat.stop()`
-- `chat.addToolApprovalResponse({ id, approved, reason? })`
+- `chat.addToolApprovalResponse({ id, approved })`
 - `chat.setMessages(next, { skipServerSync? })`
 - `chat.clearHistory()`
 - `chat.connect()`
@@ -244,7 +270,7 @@ For manual UI, keep the handle in local state:
 {/if}
 ```
 
-For AI SDK approval parts, resolve the approval with `chat.addToolApprovalResponse(...)`. The optional `reason` is reflected in local UI state; the current Cloudflare approval wire protocol sends only `toolCallId`, `approved`, and continuation metadata.
+For AI SDK approval parts, resolve the approval with `chat.addToolApprovalResponse(...)`. The Cloudflare approval wire protocol sends `toolCallId`, `approved`, and continuation metadata.
 
 ```svelte
 {#each chat.messages as message}

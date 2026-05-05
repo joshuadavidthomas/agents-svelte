@@ -406,11 +406,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
   }
 
-  override addToolApprovalResponse = (opts: {
-    id: string;
-    approved: boolean;
-    reason?: string;
-  }): void => {
+  override addToolApprovalResponse = (opts: { id: string; approved: boolean }): void => {
     if (this.#closed) {
       return;
     }
@@ -877,7 +873,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     );
   }
 
-  #applyToolApprovalLocally(opts: { id: string; approved: boolean; reason?: string }): void {
+  #applyToolApprovalLocally(opts: { id: string; approved: boolean }): void {
     this.#updateMessageParts(
       (message) =>
         message.parts.some(
@@ -894,7 +890,6 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
               approval: {
                 id: opts.id,
                 approved: opts.approved,
-                reason: opts.reason,
               },
             }
           : part,

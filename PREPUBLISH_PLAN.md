@@ -14,6 +14,8 @@ Goal: get `agents-svelte` ready for a first public publish with a small, reliabl
 - `AgentChat.pendingToolCalls` remains synchronized from `messages` while retaining reactive public tool-call handles; the derived-only version was rejected because it mutates handle `$state` during derivation.
 - Public examples use explicit `completedUsage` snapshot state so usage/cost updates after a stream completes instead of ticking during streaming.
 - Cross-tab/reconnect replay handling now tracks pending replay streams, clears hydrated assistant parts on replay start, drops stale replay chunks, and collapses duplicate replay text prefixes.
+- `addToolApprovalResponse` no longer accepts a local-only `reason`; the public API now matches the Cloudflare approval wire protocol.
+- Async Agent query params now resolve before socket creation, dedupe concurrent resolutions, expose reactive query status/errors, refresh on disconnect, and support TTL-based refresh without React-style dependency arrays.
 - The pnpm migration is committed, including `pnpm-lock.yaml`, `pnpm-workspace.yaml`, deleted `package-lock.json` files, and updated root/example package files.
 
 ## Must fix before publish
@@ -24,19 +26,9 @@ None currently tracked.
 
 These are not launch blockers for an experimental `0.1.0`, but they are worth addressing before the API settles.
 
-1. Add upstream-style async query lifecycle support.
-
-    React supports cache TTL, refresh on disconnect, query deps, and Suspense. The Svelte adapter currently passes `query` straight to PartySocket.
-
-    Risk: stale auth tokens on reconnect.
-
-2. Add a Svelte equivalent of `useAgentToolEvents`.
+1. Add a Svelte equivalent of `useAgentToolEvents`.
 
     Upstream exposes sub-agent tool run events. This matters most for multi-agent chat patterns.
-
-3. Clarify or remove local-only approval `reason`.
-
-    `addToolApprovalResponse({ reason })` applies `reason` locally, but the wire protocol does not send it. Server updates may overwrite it.
 
 ## Keep as-is
 
