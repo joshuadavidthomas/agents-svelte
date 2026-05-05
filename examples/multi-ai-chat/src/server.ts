@@ -36,9 +36,9 @@ export class Inbox extends Agent<Env, InboxState> {
   initialState = { chats: [] };
 
   async onStart() {
-    this
+    void this
       .sql`CREATE TABLE IF NOT EXISTS chat_meta (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_message_preview TEXT)`;
-    this
+    void this
       .sql`CREATE TABLE IF NOT EXISTS inbox_memory (label TEXT PRIMARY KEY, content TEXT NOT NULL, updated_at TEXT NOT NULL)`;
     await this.refreshState();
   }
@@ -55,7 +55,7 @@ export class Inbox extends Agent<Env, InboxState> {
     const now = new Date().toISOString();
     const title = opts?.title?.trim() || defaultTitle();
     await this.subAgent(Chat, id);
-    this
+    void this
       .sql`INSERT INTO chat_meta (id, title, created_at, updated_at) VALUES (${id}, ${title}, ${now}, ${now})`;
     await this.refreshState();
     return id;
@@ -66,14 +66,14 @@ export class Inbox extends Agent<Env, InboxState> {
     const nextTitle = title.trim();
     if (!nextTitle) return;
     const now = new Date().toISOString();
-    this.sql`UPDATE chat_meta SET title = ${nextTitle}, updated_at = ${now} WHERE id = ${id}`;
+    void this.sql`UPDATE chat_meta SET title = ${nextTitle}, updated_at = ${now} WHERE id = ${id}`;
     await this.refreshState();
   }
 
   @callable()
   async deleteChat(id: string) {
     await this.deleteSubAgent(Chat, id);
-    this.sql`DELETE FROM chat_meta WHERE id = ${id}`;
+    void this.sql`DELETE FROM chat_meta WHERE id = ${id}`;
     await this.refreshState();
   }
 
@@ -88,7 +88,7 @@ export class Inbox extends Agent<Env, InboxState> {
   @callable()
   async setSharedMemory(label = MEMORY_LABEL, content: string) {
     const now = new Date().toISOString();
-    this
+    void this
       .sql`INSERT INTO inbox_memory (label, content, updated_at) VALUES (${label}, ${content}, ${now}) ON CONFLICT(label) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`;
     return content;
   }
@@ -96,7 +96,7 @@ export class Inbox extends Agent<Env, InboxState> {
   @callable()
   async recordChatTurn(chatId: string, preview: string) {
     const now = new Date().toISOString();
-    this
+    void this
       .sql`UPDATE chat_meta SET updated_at = ${now}, last_message_preview = ${preview} WHERE id = ${chatId}`;
     await this.refreshState();
   }

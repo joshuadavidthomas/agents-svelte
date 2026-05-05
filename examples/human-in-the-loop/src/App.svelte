@@ -63,9 +63,9 @@
   });
 
   $effect(() => {
-    chat.messages.length;
-    chat.isStreaming;
-    awaitingResponse;
+    void chat.messages.length;
+    void chat.isStreaming;
+    void awaitingResponse;
 
     tick().then(() => {
       if (!scrollContainer) return;

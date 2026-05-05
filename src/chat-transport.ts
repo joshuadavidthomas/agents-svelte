@@ -139,7 +139,7 @@ export class AgentChatTransport<
     this.#pendingResume = null;
     this.#abortActiveContinuation = null;
 
-    for (const [requestId, session] of [...this.#activeStreams]) {
+    for (const [requestId, session] of this.#activeStreams) {
       try {
         this.#send({
           id: requestId,
@@ -321,7 +321,7 @@ export class AgentChatTransport<
     this.#pendingResume?.cancel();
     this.#pendingResume = null;
     this.#abortActiveContinuation?.();
-    for (const session of [...this.#activeStreams.values()]) {
+    for (const session of this.#activeStreams.values()) {
       const abortError = new Error("Aborted");
       abortError.name = "AbortError";
       session.finish(() => session.controller.error(abortError), {

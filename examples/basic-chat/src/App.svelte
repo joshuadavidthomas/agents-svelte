@@ -11,8 +11,8 @@
   let cancelledMessageIds = $state<Set<string>>(new Set());
 
   $effect(() => {
-    chat.messages.length;
-    chat.isStreaming;
+    void chat.messages.length;
+    void chat.isStreaming;
 
     tick().then(() => {
       if (!scrollContainer) return;

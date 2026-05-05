@@ -75,8 +75,8 @@
   });
 
   $effect(() => {
-    chat?.messages.length;
-    chat?.isStreaming;
+    void chat?.messages.length;
+    void chat?.isStreaming;
     requestAnimationFrame(() => scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight }));
   });
 

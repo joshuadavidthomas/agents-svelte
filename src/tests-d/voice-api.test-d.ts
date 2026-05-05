@@ -11,7 +11,7 @@ declare const voice: VoiceAgent;
 declare const input: VoiceInput;
 
 // @ts-expect-error underlying VoiceClient is intentionally not public
-voice.client;
+void voice.client;
 
 // @ts-expect-error underlying VoiceClient is intentionally not public
-input.client;
+void input.client;

@@ -567,7 +567,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     const last = this.messages[this.messages.length - 1];
     if (!last || last.role !== "assistant") {
       this.#pendingToolCalls = [];
-      for (const toolCallId of [...this.#toolCalls.keys()]) {
+      for (const toolCallId of this.#toolCalls.keys()) {
         if (!currentToolCallIds.has(toolCallId)) {
           this.#toolCalls.delete(toolCallId);
         }
@@ -627,7 +627,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       pendingToolCalls.push(toolCall);
     }
 
-    for (const toolCallId of [...this.#toolCalls.keys()]) {
+    for (const toolCallId of this.#toolCalls.keys()) {
       if (!currentToolCallIds.has(toolCallId)) {
         this.#toolCalls.delete(toolCallId);
       }

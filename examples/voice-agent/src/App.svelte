@@ -49,7 +49,7 @@
   let llmModel = $state<LlmModel>("glm");
   let textInput = $state("");
   let webrtcState = $state("new");
-  let scrollContainer: HTMLElement | undefined;
+  let scrollContainer = $state<HTMLElement>();
   let sfuAudioInput: SFUAudioInput | undefined;
   const sessionId = getSessionId();
   const sessionShortId = sessionId.slice(0, 8);
@@ -123,8 +123,8 @@
   });
 
   $effect(() => {
-    voice.transcript.length;
-    voice.interimTranscript;
+    void voice.transcript.length;
+    void voice.interimTranscript;
     if (!scrollContainer) return;
     scrollContainer.scrollTop = scrollContainer.scrollHeight;
   });
