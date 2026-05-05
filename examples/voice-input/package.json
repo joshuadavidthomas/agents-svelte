@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@cloudflare/voice": ">=0.1.0 <1.0.0",
-    "@joshthomas/cloudflare-agents-svelte": "file:../..",
     "agents": ">=0.9.0 <1.0.0",
+    "agents-svelte": "file:../..",
     "partysocket": "^1.0.0",
     "svelte": "^5.0.0"
   },

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { createAgent } from "@joshthomas/cloudflare-agents-svelte";
-  import { createAgentChat } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat } from "agents-svelte/chat";
 
   const agent = createAgent({ agent: "ChatAgent", name: "basic-chat" });
   const chat = createAgentChat({ agent });
@@ -143,7 +143,7 @@
 </script>
 
 <svelte:head>
-  <title>AI Chat · cloudflare-agents-svelte</title>
+  <title>AI Chat · agents-svelte</title>
 </svelte:head>
 
 <div class="shell">

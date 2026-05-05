@@ -438,7 +438,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       );
       if (!knownApproval) {
         console.warn(
-          `[cloudflare-agents-svelte/chat] addToolApprovalResponse: no toolCallId for approval id "${opts.id}". Server will not be notified.`,
+          `[agents-svelte/chat] addToolApprovalResponse: no toolCallId for approval id "${opts.id}". Server will not be notified.`,
         );
       }
       return;

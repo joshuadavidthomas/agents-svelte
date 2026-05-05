@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cloudflare-agents-svelte-multi-ai-chat",
+  "name": "agents-svelte-multi-ai-chat",
   "main": "src/server.ts",
   "compatibility_date": "2026-04-25",
   "compatibility_flags": ["nodejs_compat"],

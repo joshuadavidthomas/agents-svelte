@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { createAgent } from "@joshthomas/cloudflare-agents-svelte";
-  import { createAgentChat } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat } from "agents-svelte/chat";
 
   type PageData = {
     agentHost: string;
@@ -97,7 +97,7 @@
 
 <svelte:head>
   <title>SvelteKit chat · Cloudflare Agents Svelte</title>
-  <meta name="description" content="SvelteKit chat example for @joshthomas/cloudflare-agents-svelte" />
+  <meta name="description" content="SvelteKit chat example for agents-svelte" />
 </svelte:head>
 
 <main class="app-shell">

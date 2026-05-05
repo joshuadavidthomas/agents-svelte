@@ -3,13 +3,13 @@
   import {
     VoiceAgent,
     type VoiceStatus,
-  } from "@joshthomas/cloudflare-agents-svelte/voice";
+  } from "agents-svelte/voice";
   import { SFUAudioInput, type VoiceTransportMode } from "./sfu-voice.svelte";
 
   type SttModel = "flux" | "nova-3";
   type LlmModel = "glm" | "gpt-oss-20b" | "kimi";
 
-  const SESSION_KEY = "cloudflare-agents-svelte-voice-agent-session-id";
+  const SESSION_KEY = "agents-svelte-voice-agent-session-id";
 
   function getSessionId(): string {
     let id = localStorage.getItem(SESSION_KEY);
@@ -155,7 +155,7 @@
 </script>
 
 <svelte:head>
-  <title>Voice Agent · cloudflare-agents-svelte</title>
+  <title>Voice Agent · agents-svelte</title>
 </svelte:head>
 
 <div class="shell">

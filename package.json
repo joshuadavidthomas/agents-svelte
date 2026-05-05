@@ -1,5 +1,5 @@
 {
-  "name": "@joshthomas/cloudflare-agents-svelte",
+  "name": "agents-svelte",
   "version": "0.1.0",
   "private": false,
   "description": "Community Svelte 5 bindings for the Cloudflare Agents SDK",
@@ -10,15 +10,15 @@
     "svelte",
     "sveltekit"
   ],
-  "homepage": "https://github.com/joshuadavidthomas/cloudflare-agents-svelte#readme",
+  "homepage": "https://github.com/joshuadavidthomas/agents-svelte#readme",
   "bugs": {
-    "url": "https://github.com/joshuadavidthomas/cloudflare-agents-svelte/issues"
+    "url": "https://github.com/joshuadavidthomas/agents-svelte/issues"
   },
   "license": "MIT",
   "author": "Josh Thomas",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joshuadavidthomas/cloudflare-agents-svelte.git"
+    "url": "git+https://github.com/joshuadavidthomas/agents-svelte.git"
   },
   "files": [
     "src/*.ts",

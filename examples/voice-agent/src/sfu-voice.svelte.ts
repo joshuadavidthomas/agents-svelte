@@ -1,4 +1,4 @@
-import type { VoiceAudioInput } from "@joshthomas/cloudflare-agents-svelte/voice";
+import type { VoiceAudioInput } from "agents-svelte/voice";
 
 const STUN_SERVER = "stun:stun.cloudflare.com:3478";
 

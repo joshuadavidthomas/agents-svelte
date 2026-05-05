@@ -1,4 +1,4 @@
-# @joshthomas/cloudflare-agents-svelte
+# agents-svelte
 
 Community Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/agents).
 
@@ -18,7 +18,7 @@ This package ships source-only for now. Consumers need Svelte 5 tooling that can
 ## Install
 
 ```bash
-npm install @joshthomas/cloudflare-agents-svelte agents partysocket svelte
+npm install agents-svelte agents partysocket svelte
 ```
 
 For chat, also install:
@@ -45,11 +45,11 @@ npm install @cloudflare/voice
 
 ## Modules
 
-| Subpath                                      | Exports                                                                                       | Replaces                                                        |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `@joshthomas/cloudflare-agents-svelte`       | `Agent`, `createAgent`                                                                        | `useAgent` from `agents/react`                                  |
-| `@joshthomas/cloudflare-agents-svelte/chat`  | `AgentChat`, `AgentChatToolCall`, `createAgentChat`, `getAgentMessages`                       | `useAgentChat` from `agents/ai-react`                           |
-| `@joshthomas/cloudflare-agents-svelte/voice` | `VoiceAgent`, `VoiceInput`, `createVoiceAgent`, `createVoiceInput`, `WebSocketVoiceTransport` | `useVoiceAgent`, `useVoiceInput` from `@cloudflare/voice/react` |
+| Subpath               | Exports                                                                                       | Replaces                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `agents-svelte`       | `Agent`, `createAgent`                                                                        | `useAgent` from `agents/react`                                  |
+| `agents-svelte/chat`  | `AgentChat`, `AgentChatToolCall`, `createAgentChat`, `getAgentMessages`                       | `useAgentChat` from `agents/ai-react`                           |
+| `agents-svelte/voice` | `VoiceAgent`, `VoiceInput`, `createVoiceAgent`, `createVoiceInput`, `WebSocketVoiceTransport` | `useVoiceAgent`, `useVoiceInput` from `@cloudflare/voice/react` |
 
 ## Construction model
 
@@ -81,7 +81,7 @@ Class constructors are inert. Direct class users must call `.connect()` before u
 
 ```svelte
 <script lang="ts">
-  import { createAgent } from "@joshthomas/cloudflare-agents-svelte";
+  import { createAgent } from "agents-svelte";
 
   type State = { count: number };
 
@@ -131,8 +131,8 @@ Wraps `@ai-sdk/svelte`'s `Chat` class with the Cloudflare Agents WebSocket trans
 
 ```svelte
 <script lang="ts">
-  import { createAgent } from "@joshthomas/cloudflare-agents-svelte";
-  import { createAgentChat } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat } from "agents-svelte/chat";
 
   const agent = createAgent({ agent: "ChatAgent", name: "session-1" });
   const chat = createAgentChat({ agent });
@@ -231,7 +231,7 @@ For manual UI, pass the handle to the UI that will resolve it:
 
 ```svelte
 <script lang="ts">
-  import type { AgentChatToolCall } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import type { AgentChatToolCall } from "agents-svelte/chat";
 
   let picker = $state<AgentChatToolCall | null>(null);
 
@@ -273,7 +273,7 @@ For AI SDK approval parts, resolve the approval with `chat.addToolApprovalRespon
 {/each}
 ```
 
-Helpers exported from `@joshthomas/cloudflare-agents-svelte/chat`:
+Helpers exported from `agents-svelte/chat`:
 
 - `getAgentMessages(...)`
 
@@ -283,7 +283,7 @@ Voice bindings are class-based too. `VoiceAgent` reads directly from `VoiceClien
 
 ```svelte
 <script lang="ts">
-  import { createVoiceAgent } from "@joshthomas/cloudflare-agents-svelte/voice";
+  import { createVoiceAgent } from "agents-svelte/voice";
 
   const voice = createVoiceAgent({ agent: "voice-agent" });
 </script>
@@ -322,7 +322,7 @@ Methods:
 
 ```svelte
 <script lang="ts">
-  import { createVoiceInput } from "@joshthomas/cloudflare-agents-svelte/voice";
+  import { createVoiceInput } from "agents-svelte/voice";
 
   const input = createVoiceInput({ agent: "voice-input-agent" });
 </script>
@@ -361,8 +361,8 @@ You can load initial chat history with SvelteKit `load` and pass it into the cli
 
 ```svelte
 <script lang="ts">
-  import { createAgent } from "@joshthomas/cloudflare-agents-svelte";
-  import { createAgentChat } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat } from "agents-svelte/chat";
 
   let { data } = $props();
 
@@ -382,7 +382,7 @@ If you use classes directly in SvelteKit components, connect them from browser-o
 ```svelte
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { Agent } from "@joshthomas/cloudflare-agents-svelte";
+  import { Agent } from "agents-svelte";
 
   const agent = new Agent({ agent: "ChatAgent" });
 
@@ -405,4 +405,4 @@ If you use classes directly in SvelteKit components, connect them from browser-o
 
 ## Implementation note
 
-`@joshthomas/cloudflare-agents-svelte/chat` includes an adapted internal Agent chat transport based on `@cloudflare/ai-chat/src/ws-chat-transport.ts`. It owns the Cloudflare Agents chat wire protocol for this Svelte adapter so the public API can stay Svelte-shaped and independently publishable.
+`agents-svelte/chat` includes an adapted internal Agent chat transport based on `@cloudflare/ai-chat/src/ws-chat-transport.ts`. It owns the Cloudflare Agents chat wire protocol for this Svelte adapter so the public API can stay Svelte-shaped and independently publishable.

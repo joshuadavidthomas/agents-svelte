@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cloudflare-agents-svelte-human-in-the-loop",
+  "name": "agents-svelte-human-in-the-loop",
   "main": "src/server.ts",
   "compatibility_date": "2026-04-25",
   "compatibility_flags": ["nodejs_compat"],

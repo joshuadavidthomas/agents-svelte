@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Community Svelte adapter for the Cloudflare Agents SDK, published as `@joshthomas/cloudflare-agents-svelte`.
+Community Svelte adapter for the Cloudflare Agents SDK, published as `agents-svelte`.
 
 This repository is now public-facing. Treat examples, docs, README text, package metadata, and commit messages as material a user may read without context. Dogfooding notes are useful while developing, but the user-facing package should read like a real Svelte library, not an internal experiment.
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { Agent, createAgent } from "@joshthomas/cloudflare-agents-svelte";
-  import { AgentChat } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import { Agent, createAgent } from "agents-svelte";
+  import { AgentChat } from "agents-svelte/chat";
 
   type ChatSummary = {
     id: string;

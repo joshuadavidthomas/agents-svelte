@@ -81,7 +81,7 @@ npx wrangler deploy --config wrangler.agent.jsonc
 Then deploy the SvelteKit Worker with `PUBLIC_AGENT_HOST` set to the Agent Worker host:
 
 ```bash
-PUBLIC_AGENT_HOST=cloudflare-agents-svelte-sveltekit-chat-agent.<subdomain>.workers.dev npm run build
+PUBLIC_AGENT_HOST=agents-svelte-sveltekit-chat-agent.<subdomain>.workers.dev npm run build
 npx wrangler deploy
 ```
 

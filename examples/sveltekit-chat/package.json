@@ -12,10 +12,10 @@
   "dependencies": {
     "@ai-sdk/svelte": "^4.0.0",
     "@cloudflare/ai-chat": ">=0.3.2 <1.0.0",
-    "@joshthomas/cloudflare-agents-svelte": "file:../..",
     "@sveltejs/adapter-cloudflare": "^7.2.8",
     "@sveltejs/kit": "^2.58.0",
     "agents": ">=0.9.0 <1.0.0",
+    "agents-svelte": "file:../..",
     "ai": "^6.0.0",
     "partysocket": "^1.0.0",
     "svelte": "^5.0.0",

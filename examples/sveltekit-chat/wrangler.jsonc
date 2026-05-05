@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cloudflare-agents-svelte-sveltekit-chat",
+  "name": "agents-svelte-sveltekit-chat",
   "main": ".svelte-kit/cloudflare/_worker.js",
   "compatibility_date": "2026-04-25",
   "compatibility_flags": ["nodejs_compat"],

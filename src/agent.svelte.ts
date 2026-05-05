@@ -124,9 +124,7 @@ export class Agent<AgentT = unknown, State = unknown> {
     ];
 
     if (agentNamespace !== agentNamespace.toLowerCase()) {
-      console.warn(
-        `[cloudflare-agents-svelte] Agent namespace should be lowercase. Got: ${agentNamespace}`,
-      );
+      console.warn(`[agents-svelte] Agent namespace should be lowercase. Got: ${agentNamespace}`);
     }
 
     this.identity = {
@@ -159,7 +157,7 @@ export class Agent<AgentT = unknown, State = unknown> {
     let host = options.host;
     if (!host) {
       if (typeof window === "undefined") {
-        throw new Error("[cloudflare-agents-svelte] `host` is required outside the browser");
+        throw new Error("[agents-svelte] `host` is required outside the browser");
       }
       host = window.location.host;
     }
@@ -347,7 +345,7 @@ export class Agent<AgentT = unknown, State = unknown> {
 
   #requireSocket(operation: string): PartySocket {
     if (!this.#socket) {
-      throw new Error(`[cloudflare-agents-svelte] ${operation} requires a connected Agent`);
+      throw new Error(`[agents-svelte] ${operation} requires a connected Agent`);
     }
     return this.#socket;
   }

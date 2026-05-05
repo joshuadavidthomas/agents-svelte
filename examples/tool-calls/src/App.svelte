@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { createAgent } from "@joshthomas/cloudflare-agents-svelte";
-  import { createAgentChat, type ClientToolSchema } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat, type ClientToolSchema } from "agents-svelte/chat";
   import type { UIMessage } from "ai";
 
   type ToolDefinition = ClientToolSchema & {

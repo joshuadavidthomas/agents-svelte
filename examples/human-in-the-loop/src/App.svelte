@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { getToolName, isToolUIPart, type UIMessage } from "ai";
-  import { createAgent } from "@joshthomas/cloudflare-agents-svelte";
-  import { createAgentChat } from "@joshthomas/cloudflare-agents-svelte/chat";
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat } from "agents-svelte/chat";
 
   const MODEL_ID = "@cf/moonshotai/kimi-k2.6";
   const MODEL_INPUT_COST_PER_MILLION = 0.5;
@@ -200,7 +200,7 @@
 </script>
 
 <svelte:head>
-  <title>Human in the Loop · cloudflare-agents-svelte</title>
+  <title>Human in the Loop · agents-svelte</title>
 </svelte:head>
 
 <div class="shell">

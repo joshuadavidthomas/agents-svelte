@@ -107,7 +107,7 @@ export class AgentChatTransport<
     const connection = this.#getConnection();
     if (!connection) {
       throw new Error(
-        "[cloudflare-agents-svelte/chat] AgentChatTransport requires a connection before start()",
+        "[agents-svelte/chat] AgentChatTransport requires a connection before start()",
       );
     }
     this.#onEvent = options.onEvent;
@@ -699,7 +699,7 @@ export class AgentChatTransport<
   #send(payload: Record<string, unknown>): void {
     const connection = this.#getConnection();
     if (!connection) {
-      throw new Error("[cloudflare-agents-svelte/chat] AgentChatTransport is not connected");
+      throw new Error("[agents-svelte/chat] AgentChatTransport is not connected");
     }
     connection.send(JSON.stringify(payload));
   }

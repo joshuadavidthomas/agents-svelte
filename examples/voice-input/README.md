@@ -2,7 +2,7 @@
 
 Svelte version of Cloudflare's [`voice-input`](https://github.com/cloudflare/agents/tree/main/examples/voice-input) example.
 
-This example shows real-time voice-to-text dictation with `createVoiceInput` from `@joshthomas/cloudflare-agents-svelte/voice`. Speech is streamed to a Cloudflare Agent, transcribed with Workers AI Nova 3 STT, and rendered as reactive Svelte state.
+This example shows real-time voice-to-text dictation with `createVoiceInput` from `agents-svelte/voice`. Speech is streamed to a Cloudflare Agent, transcribed with Workers AI Nova 3 STT, and rendered as reactive Svelte state.
 
 ## Run locally
 

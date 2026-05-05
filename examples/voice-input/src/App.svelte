@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { createVoiceInput } from "@joshthomas/cloudflare-agents-svelte/voice";
+  import { createVoiceInput } from "agents-svelte/voice";
 
   const voice = createVoiceInput({ agent: "VoiceInputAgent" });
 
@@ -32,7 +32,7 @@
 </script>
 
 <svelte:head>
-  <title>Voice Input · cloudflare-agents-svelte</title>
+  <title>Voice Input · agents-svelte</title>
 </svelte:head>
 
 <div class="shell">
