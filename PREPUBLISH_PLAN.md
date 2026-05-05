@@ -17,6 +17,7 @@ Goal: get `agents-svelte` ready for a first public publish with a small, reliabl
 - `addToolApprovalResponse` no longer accepts a local-only `reason`; the public API now matches the Cloudflare approval wire protocol.
 - Async Agent query params now resolve before socket creation, dedupe concurrent resolutions, expose reactive query status/errors, refresh on disconnect, and support TTL-based refresh without React-style dependency arrays.
 - `AgentToolEvents` now provides a Svelte runes-class equivalent of upstream `useAgentToolEvents`, including grouped sub-agent runs, unbound runs, replay dedupe, reset, and socket reattach after Agent reconnect.
+- Public API coverage is tracked in `API_COVERAGE.md`, and the multi AI chat example renders `AgentToolEvents` next to matching chat tool calls.
 - The pnpm migration is committed, including `pnpm-lock.yaml`, `pnpm-workspace.yaml`, deleted `package-lock.json` files, and updated root/example package files.
 
 ## Must fix before publish

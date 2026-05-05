@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { Agent, createAgent } from "agents-svelte";
-  import { AgentChat } from "agents-svelte/chat";
+  import { AgentChat, AgentToolEvents, type AgentToolRunState } from "agents-svelte/chat";
 
   type ChatSummary = {
     id: string;
@@ -46,6 +46,7 @@
   const activeChatSummary = $derived(chats.find((chat) => chat.id === activeId));
   let chatAgent = $state<Agent | null>(null);
   let chat = $state<AgentChat | null>(null);
+  let toolEvents = $state<AgentToolEvents | null>(null);
 
   $effect(() => {
     if (!activeId && chats.length > 0) setActiveChat(chats[0].id);
@@ -58,6 +59,7 @@
   });
 
   onDestroy(() => {
+    toolEvents?.close();
     chat?.close();
     chatAgent?.close();
   });
@@ -72,6 +74,13 @@
       completedUsage = calculateUsage();
       wasStreaming = false;
     }
+  });
+
+  $effect(() => {
+    const events = toolEvents;
+    if (!events) return;
+    events.connect(chatAgent?.socket ?? null);
+    return () => events.close();
   });
 
   $effect(() => {
@@ -121,6 +130,7 @@
   function setActiveChat(id: string | null) {
     if (id === activeId) return;
 
+    toolEvents?.close();
     chat?.close();
     chatAgent?.close();
     activeId = id;
@@ -130,14 +140,18 @@
     if (!id) {
       chat = null;
       chatAgent = null;
+      toolEvents = null;
       return;
     }
 
     const nextAgent = new Agent({ agent: "Inbox", name: DEMO_USER, sub: [{ agent: "Chat", name: id }] });
     const nextChat = new AgentChat({ agent: nextAgent });
+    const nextToolEvents = new AgentToolEvents({ agent: nextAgent });
     nextChat.connect();
+    nextToolEvents.connect();
     chatAgent = nextAgent;
     chat = nextChat;
+    toolEvents = nextToolEvents;
   }
 
   function selectChat(id: string) {
@@ -189,6 +203,25 @@
 
   function toolOutput(part: unknown): unknown {
     return typeof part === "object" && part !== null && "output" in part ? part.output : undefined;
+  }
+
+  function toolCallId(part: unknown): string | null {
+    if (typeof part !== "object" || part === null || !("toolCallId" in part)) return null;
+    return typeof part.toolCallId === "string" ? part.toolCallId : null;
+  }
+
+  function toolRuns(part: unknown): AgentToolRunState[] {
+    const id = toolCallId(part);
+    return id && toolEvents ? toolEvents.getRunsForToolCall(id) : [];
+  }
+
+  function runText(run: AgentToolRunState): string {
+    return run.parts.map((part) => partText(part)).filter(Boolean).join("\n");
+  }
+
+  function runPreview(run: AgentToolRunState): string {
+    if (typeof run.inputPreview === "string") return run.inputPreview;
+    return run.inputPreview === undefined ? "" : JSON.stringify(run.inputPreview);
   }
 </script>
 
@@ -278,6 +311,18 @@
                     <strong>{toolName(part)}</strong>
                     <span>{toolState(part)}</span>
                     {#if toolOutput(part) !== undefined}<pre>{JSON.stringify(toolOutput(part), null, 2)}</pre>{/if}
+                    {#each toolRuns(part) as run (run.runId)}
+                      <div class="tool-run">
+                        <div class="tool-run-header">
+                          <strong>{run.display?.name ?? run.agentType}</strong>
+                          <span>{run.status}</span>
+                        </div>
+                        {#if runPreview(run)}<small>{runPreview(run)}</small>{/if}
+                        {#if runText(run)}<p>{runText(run)}</p>{/if}
+                        {#if run.summary}<p>{run.summary}</p>{/if}
+                        {#if run.error}<p class="tool-run-error">{run.error}</p>{/if}
+                      </div>
+                    {/each}
                   </div>
                 {/if}
               {/each}
@@ -339,6 +384,10 @@
   .reasoning summary { color: #4b5563; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
   .reasoning p { margin-top: 0.5rem; font-size: 0.8125rem; font-style: italic; line-height: 1.5; white-space: pre-wrap; }
   .tool-card { display: grid; gap: 0.5rem; margin-top: 0.5rem; border: 1px solid #bfdbfe; border-radius: 0.75rem; padding: 0.75rem; background: #eff6ff; color: #1e3a8a; font-size: 0.8125rem; }
+  .tool-run { display: grid; gap: 0.375rem; border-top: 1px solid #bfdbfe; padding-top: 0.5rem; }
+  .tool-run-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .tool-run small, .tool-run p { white-space: pre-wrap; }
+  .tool-run-error { color: #991b1b; }
   pre { overflow-x: auto; margin: 0; white-space: pre-wrap; }
   .empty, .center-card { max-width: 36rem; margin: 2rem auto; border: 1px solid #e5e7eb; border-radius: 0.875rem; padding: 2rem; background: #fff; color: #6b7280; text-align: center; }
   .composer { position: absolute; right: 0; bottom: 0; left: 0; display: flex; gap: 0.5rem; border-top: 1px solid #e5e7eb; padding: 1rem; background: rgb(255 255 255 / 0.94); }

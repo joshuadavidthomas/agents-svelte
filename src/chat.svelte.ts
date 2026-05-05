@@ -182,7 +182,11 @@ export async function getAgentMessages<M extends UIMessage = UIMessage>(
   }
   const text = await r.text();
   if (!text.trim()) return [];
-  return JSON.parse(text) as M[];
+  try {
+    return JSON.parse(text) as M[];
+  } catch (cause) {
+    throw new Error("[agents-svelte/chat] Failed to parse initial messages", { cause });
+  }
 }
 
 export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {

@@ -1,6 +1,13 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import { routeAgentRequest, Agent, callable } from "agents";
-import { convertToModelMessages, stepCountIs, streamText, tool } from "ai";
+import {
+  convertToModelMessages,
+  stepCountIs,
+  streamText,
+  tool,
+  type ToolExecutionOptions,
+} from "ai";
+import type { AgentToolEvent, AgentToolEventMessage } from "agents/chat";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 
@@ -109,6 +116,53 @@ export class Inbox extends Agent<Env, InboxState> {
 }
 
 export class Chat extends AIChatAgent<Env> {
+  async #withToolEvent<T>(
+    options: ToolExecutionOptions,
+    event: {
+      agentType: string;
+      displayName: string;
+      inputPreview?: unknown;
+    },
+    run: () => Promise<T>,
+    summarize: (result: T) => string,
+  ): Promise<T> {
+    const runId = crypto.randomUUID();
+    this.#emitToolEvent(options.toolCallId, 0, {
+      kind: "started",
+      runId,
+      agentType: event.agentType,
+      inputPreview: event.inputPreview,
+      order: 0,
+      display: { name: event.displayName },
+    });
+
+    try {
+      const result = await run();
+      const summary = summarize(result);
+      this.#emitToolEvent(options.toolCallId, 1, {
+        kind: "chunk",
+        runId,
+        body: JSON.stringify({ type: "text-delta", delta: summary }),
+      });
+      this.#emitToolEvent(options.toolCallId, 2, { kind: "finished", runId, summary });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#emitToolEvent(options.toolCallId, 1, { kind: "error", runId, error: message });
+      throw error;
+    }
+  }
+
+  #emitToolEvent(parentToolCallId: string | undefined, sequence: number, event: AgentToolEvent) {
+    const message: AgentToolEventMessage = {
+      type: "agent-tool-event",
+      ...(parentToolCallId ? { parentToolCallId } : {}),
+      sequence,
+      event,
+    };
+    this.broadcast(JSON.stringify(message));
+  }
+
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const workersai = createWorkersAI({ binding: this.env.AI });
     const inbox = await this.parentAgent(Inbox);
@@ -129,25 +183,53 @@ export class Chat extends AIChatAgent<Env> {
         rememberFact: tool({
           description: "Save a fact to shared memory for all chats in this inbox.",
           inputSchema: z.object({ fact: z.string() }),
-          execute: async ({ fact }) => {
-            const current = await inbox.getSharedMemory(MEMORY_LABEL);
-            const next = `${current.trim()}\n- ${fact}`.trim();
-            await inbox.setSharedMemory(MEMORY_LABEL, next);
-            return { remembered: fact };
-          },
+          execute: async ({ fact }, options) =>
+            this.#withToolEvent(
+              options,
+              {
+                agentType: "MemoryTool",
+                displayName: "Remember fact",
+                inputPreview: fact,
+              },
+              async () => {
+                const current = await inbox.getSharedMemory(MEMORY_LABEL);
+                const next = `${current.trim()}\n- ${fact}`.trim();
+                await inbox.setSharedMemory(MEMORY_LABEL, next);
+                return { remembered: fact };
+              },
+              ({ remembered }) => `Saved fact: ${remembered}`,
+            ),
         }),
         recallMemory: tool({
           description: "Read shared memory for this inbox.",
           inputSchema: z.object({}),
-          execute: async () => {
-            const content = await inbox.getSharedMemory(MEMORY_LABEL);
-            return { content, facts: content.split("\n").filter(Boolean).length };
-          },
+          execute: async (_input, options) =>
+            this.#withToolEvent(
+              options,
+              {
+                agentType: "MemoryTool",
+                displayName: "Recall memory",
+              },
+              async () => {
+                const content = await inbox.getSharedMemory(MEMORY_LABEL);
+                return { content, facts: content.split("\n").filter(Boolean).length };
+              },
+              ({ facts }) => `Found ${facts} saved ${facts === 1 ? "fact" : "facts"}.`,
+            ),
         }),
         getCurrentTime: tool({
           description: "Get the current UTC time.",
           inputSchema: z.object({}),
-          execute: async () => ({ now: new Date().toISOString(), timeZone: "UTC" }),
+          execute: async (_input, options) =>
+            this.#withToolEvent(
+              options,
+              {
+                agentType: "TimeTool",
+                displayName: "Current time",
+              },
+              async () => ({ now: new Date().toISOString(), timeZone: "UTC" }),
+              ({ now }) => `Current UTC time: ${now}`,
+            ),
         }),
       },
     });

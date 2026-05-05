@@ -102,6 +102,68 @@ describe("AgentToolEvents", () => {
     expect(events.runsById["research-3"].parts[0]).toMatchObject({ text: "hello" });
   });
 
+  it("records terminal error, abort, and interruption frames", () => {
+    const mock = createMockAgent();
+    const events = new AgentToolEvents({ agent: mock.agent });
+    events.connect();
+
+    for (const runId of ["error-run", "aborted-run", "interrupted-run"]) {
+      mock.dispatchServerMessage(
+        frame(0, {
+          kind: "started",
+          runId,
+          agentType: "Researcher",
+          order: 0,
+        }),
+      );
+    }
+    mock.dispatchServerMessage(
+      frame(1, {
+        kind: "error",
+        runId: "error-run",
+        error: "tool failed",
+      }),
+    );
+    mock.dispatchServerMessage(
+      frame(1, {
+        kind: "aborted",
+        runId: "aborted-run",
+        reason: "user stopped",
+      }),
+    );
+    mock.dispatchServerMessage(
+      frame(1, {
+        kind: "interrupted",
+        runId: "interrupted-run",
+        error: "parent restarted",
+      }),
+    );
+
+    expect(events.runsById["error-run"]).toMatchObject({
+      status: "error",
+      error: "tool failed",
+    });
+    expect(events.runsById["aborted-run"]).toMatchObject({
+      status: "aborted",
+      error: "user stopped",
+    });
+    expect(events.runsById["interrupted-run"]).toMatchObject({
+      status: "interrupted",
+      error: "parent restarted",
+    });
+  });
+
+  it("ignores non-tool and malformed socket messages", () => {
+    const mock = createMockAgent();
+    const events = new AgentToolEvents({ agent: mock.agent });
+    events.connect();
+
+    mock.dispatchServerMessage({ type: "cf_agent_state", state: { ok: true } });
+    mock.dispatchServerMessage("not json");
+
+    expect(events.runsById).toEqual({});
+  });
+
   it("tracks unbound runs separately", () => {
     const mock = createMockAgent();
     const events = new AgentToolEvents({ agent: mock.agent });

@@ -230,6 +230,30 @@ describe("createAgentChat — initial messages", () => {
     }
   });
 
+  it("throws from getAgentMessages on invalid JSON", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("not json"));
+
+    try {
+      await expect(getAgentMessages({ url: "http://localhost/get-messages" })).rejects.toThrow(
+        "[agents-svelte/chat] Failed to parse initial messages",
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("throws from getAgentMessages on network failures", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    try {
+      await expect(getAgentMessages({ url: "http://localhost/get-messages" })).rejects.toThrow(
+        "offline",
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("does not overwrite socket-pushed messages with slower initial messages", async () => {
     const mock = createMockAgent();
     let resolveMessages!: (messages: UIMessage[]) => void;

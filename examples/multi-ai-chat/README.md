@@ -19,6 +19,7 @@ The Svelte UI connects to the inbox with `createAgent(...)`, derives the active 
 - Agent RPC with `agent.stub.createChat()`, `renameChat()`, `deleteChat()`, `getSharedMemory()`, and `setSharedMemory()`
 - Shared memory injected into every chat's system prompt
 - Server-side tools for remembering facts, recalling memory, and getting the current time
+- `AgentToolEvents` rendering live tool-run progress beside matching chat tool calls
 
 ## Cloudflare setup
 
