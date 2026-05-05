@@ -13,7 +13,36 @@ import type { MCPServersState, RPCRequest, RPCResponse } from "agents";
 import { MessageType } from "agents/types";
 import { camelCaseToKebabCase } from "./utils.ts";
 
-type QueryObject = Record<string, string | null>;
+export type QueryObject = Record<string, string | null>;
+export type QueryStatus = "idle" | "loading" | "ready" | "error";
+
+interface QueryCacheEntry {
+  promise: Promise<QueryObject>;
+  expiresAt: number;
+}
+
+const DEFAULT_QUERY_CACHE_TTL = 5 * 60 * 1000;
+const queryCache = new Map<string, QueryCacheEntry>();
+
+function getCachedQuery(key: string): QueryCacheEntry | undefined {
+  const entry = queryCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() >= entry.expiresAt) {
+    queryCache.delete(key);
+    return undefined;
+  }
+  return entry;
+}
+
+function setCachedQuery(key: string, promise: Promise<QueryObject>, ttl: number): QueryCacheEntry {
+  const entry = { promise, expiresAt: Date.now() + ttl };
+  queryCache.set(key, entry);
+  return entry;
+}
+
+function deleteCachedQuery(key: string): void {
+  queryCache.delete(key);
+}
 
 type AgentRouteSegment = {
   agent: string;
@@ -61,6 +90,7 @@ export interface CreateAgentOptions {
   basePath?: string;
   path?: string;
   query?: QueryObject | (() => QueryObject | Promise<QueryObject>);
+  cacheTtl?: number;
   protocol?: "ws" | "wss";
   protocols?: string[];
   id?: string;
@@ -118,6 +148,8 @@ export class Agent<AgentT = unknown, State = unknown> {
     identified: false,
   });
   connected = $state(false);
+  queryStatus = $state<QueryStatus>("idle");
+  queryError = $state<Error | null>(null);
   stateError = $state<string | null>(null);
   mcp = $state<MCPServersState | null>(null);
   lastStateUpdate = $state<StateUpdate<State> | null>(null);
@@ -140,6 +172,10 @@ export class Agent<AgentT = unknown, State = unknown> {
     agent: null,
   };
   #eventSeq = 0;
+  #started = false;
+  #connecting = false;
+  #connectionGeneration = 0;
+  #queryRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #options: CreateAgentOptions;
   #httpUrl: string | null = null;
 
@@ -206,7 +242,112 @@ export class Agent<AgentT = unknown, State = unknown> {
   }
 
   connect(): void {
-    if (this.#socket) return;
+    this.#started = true;
+    if (this.#socket || this.#connecting) return;
+
+    if (typeof this.#options.query !== "function") {
+      this.queryStatus = this.#options.query ? "ready" : "idle";
+      this.queryError = null;
+      this.#openSocket(this.#options.query);
+      return;
+    }
+
+    const generation = ++this.#connectionGeneration;
+    void this.#connectResolved(generation).catch(() => {});
+  }
+
+  refreshQuery(): void {
+    if (typeof this.#options.query !== "function") {
+      return;
+    }
+
+    deleteCachedQuery(this.#queryCacheKey());
+    this.#clearQueryRefreshTimer();
+    this.#connecting = true;
+    const generation = ++this.#connectionGeneration;
+    void this.#resolveQuery(generation)
+      .then((query) => {
+        if (generation !== this.#connectionGeneration || !this.#started) {
+          return;
+        }
+        this.#replaceSocket(query, generation);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (generation === this.#connectionGeneration) {
+          this.#connecting = false;
+        }
+      });
+  }
+
+  async #connectResolved(generation: number): Promise<void> {
+    this.#connecting = true;
+    try {
+      const query = await this.#resolveQuery(generation);
+      if (generation !== this.#connectionGeneration || !this.#started || this.#socket) {
+        return;
+      }
+      this.#openSocket(query);
+    } finally {
+      if (generation === this.#connectionGeneration) {
+        this.#connecting = false;
+      }
+    }
+  }
+
+  async #resolveQuery(generation: number): Promise<QueryObject | undefined> {
+    const query = this.#options.query;
+    if (!query) {
+      this.queryStatus = "idle";
+      this.queryError = null;
+      return undefined;
+    }
+    if (typeof query !== "function") {
+      this.queryStatus = "ready";
+      this.queryError = null;
+      return query;
+    }
+
+    this.queryStatus = "loading";
+    this.queryError = null;
+    const key = this.#queryCacheKey();
+    const cached = getCachedQuery(key);
+    const ttl = this.#options.cacheTtl ?? DEFAULT_QUERY_CACHE_TTL;
+    let entry = cached;
+    if (!entry) {
+      let promise: Promise<QueryObject>;
+      try {
+        promise = Promise.resolve(query()).catch((error) => {
+          deleteCachedQuery(key);
+          throw error;
+        });
+      } catch (error) {
+        promise = Promise.reject(error).catch((caught) => {
+          deleteCachedQuery(key);
+          throw caught;
+        });
+      }
+      entry = setCachedQuery(key, promise, ttl);
+    }
+
+    try {
+      const resolved = await entry.promise;
+      if (generation === this.#connectionGeneration) {
+        this.queryStatus = "ready";
+        this.queryError = null;
+        this.#scheduleQueryRefresh(key, entry);
+      }
+      return resolved;
+    } catch (error) {
+      if (generation === this.#connectionGeneration) {
+        this.queryStatus = "error";
+        this.queryError = error instanceof Error ? error : new Error(String(error));
+      }
+      throw error;
+    }
+  }
+
+  #openSocket(query: QueryObject | undefined): void {
     const options = this.#options;
     const agentNamespace = this.path[0].agent;
     const roomName = this.path[0].name;
@@ -219,7 +360,7 @@ export class Agent<AgentT = unknown, State = unknown> {
       path: options.path,
       protocol: options.protocol,
       protocols: options.protocols,
-      query: options.query,
+      query,
     };
     const routingOpts = options.basePath
       ? { basePath: options.basePath }
@@ -233,6 +374,18 @@ export class Agent<AgentT = unknown, State = unknown> {
     socket.addEventListener("close", this.#handleClose);
     socket.addEventListener("error", this.#handleError);
     this.#socket = socket;
+  }
+
+  #replaceSocket(query: QueryObject | undefined, generation: number): void {
+    if (generation !== this.#connectionGeneration) {
+      return;
+    }
+    if (this.#socket) {
+      this.#detachSocket(this.#socket, true);
+      this.#socket = null;
+      this.#markClosed();
+    }
+    this.#openSocket(query);
   }
 
   setState(next: State): void {
@@ -254,13 +407,13 @@ export class Agent<AgentT = unknown, State = unknown> {
   }
 
   close(): void {
+    this.#started = false;
+    this.#connecting = false;
+    this.#connectionGeneration++;
+    this.#clearQueryRefreshTimer();
     if (!this.#socket) return;
     const socket = this.#socket;
-    socket.removeEventListener("message", this.#handleMessage);
-    socket.removeEventListener("open", this.#handleOpen);
-    socket.removeEventListener("close", this.#handleClose);
-    socket.removeEventListener("error", this.#handleError);
-    socket.close();
+    this.#detachSocket(socket, true);
     this.#socket = null;
     this.#markClosed();
   }
@@ -360,9 +513,61 @@ export class Agent<AgentT = unknown, State = unknown> {
 
   #handleClose = (_e: CloseEvent) => {
     this.#markClosed();
+
+    if (typeof this.#options.query !== "function" || !this.#started || !this.#socket) {
+      return;
+    }
+
+    const socket = this.#socket;
+    this.#detachSocket(socket, true);
+    this.#socket = null;
+    deleteCachedQuery(this.#queryCacheKey());
+    this.#clearQueryRefreshTimer();
+    const generation = ++this.#connectionGeneration;
+    void this.#connectResolved(generation).catch(() => {});
   };
 
   #handleError = (_e: Event) => {};
+
+  #detachSocket(socket: PartySocket, close: boolean): void {
+    socket.removeEventListener("message", this.#handleMessage);
+    socket.removeEventListener("open", this.#handleOpen);
+    socket.removeEventListener("close", this.#handleClose);
+    socket.removeEventListener("error", this.#handleError);
+    if (close) {
+      socket.close();
+    }
+  }
+
+  #queryCacheKey(): string {
+    const { host, route } = this.#resolveConnectionOptions();
+    return JSON.stringify([host, route, this.#options.path ?? ""]);
+  }
+
+  #scheduleQueryRefresh(key: string, entry: QueryCacheEntry): void {
+    this.#clearQueryRefreshTimer();
+    if (this.#options.cacheTtl !== undefined && this.#options.cacheTtl <= 0) {
+      return;
+    }
+
+    const delay = entry.expiresAt - Date.now();
+    this.#queryRefreshTimer = setTimeout(
+      () => {
+        if (!this.#started || key !== this.#queryCacheKey()) {
+          return;
+        }
+        this.refreshQuery();
+      },
+      Math.max(0, delay),
+    );
+  }
+
+  #clearQueryRefreshTimer(): void {
+    if (this.#queryRefreshTimer) {
+      clearTimeout(this.#queryRefreshTimer);
+      this.#queryRefreshTimer = null;
+    }
+  }
 
   #requireSocket(operation: string): PartySocket {
     if (!this.#socket) {
@@ -411,7 +616,21 @@ export function createAgent<AgentT = unknown, State = unknown>(
   options: CreateAgentOptions,
 ): Agent<AgentT, State> {
   const agent = new Agent<AgentT, State>(options);
-  onMount(() => agent.connect());
+
+  if (typeof options.query === "function") {
+    let initialized = false;
+    $effect(() => {
+      if (!initialized) {
+        initialized = true;
+        agent.connect();
+        return;
+      }
+      agent.refreshQuery();
+    });
+  } else {
+    onMount(() => agent.connect());
+  }
+
   onDestroy(() => agent.close());
   return agent;
 }

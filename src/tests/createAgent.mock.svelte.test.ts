@@ -60,6 +60,16 @@ function latestSocket(): InstanceType<typeof MockPartySocket> {
   return socket;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function dispatchMessage(socket: EventTarget, data: unknown) {
   socket.dispatchEvent(
     new MessageEvent("message", {
@@ -234,6 +244,155 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
 
     expect(agent.connected).toBe(true);
     expect(socket.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("delays socket creation until an async query resolves", async () => {
+    const query = deferred<Record<string, string | null>>();
+    const agent = new Agent({
+      agent: "TestStateAgent",
+      name: "async-query",
+      host: "localhost:8787",
+      protocol: "ws",
+      query: () => query.promise,
+    });
+    cleanups.push(() => agent.close());
+
+    agent.connect();
+
+    expect(MockPartySocket.instances).toHaveLength(0);
+    expect(agent.queryStatus).toBe("loading");
+
+    query.resolve({ token: "fresh" });
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(1);
+    });
+
+    expect(latestSocket().options.query).toEqual({ token: "fresh" });
+    expect(agent.queryStatus).toBe("ready");
+    expect(agent.queryError).toBeNull();
+  });
+
+  it("deduplicates concurrent async query resolution for the same agent route", async () => {
+    const query = deferred<Record<string, string | null>>();
+    const queryFn = vi.fn(() => query.promise);
+    const first = new Agent({
+      agent: "TestStateAgent",
+      name: "shared-query",
+      host: "localhost:8787",
+      protocol: "ws",
+      query: queryFn,
+    });
+    const second = new Agent({
+      agent: "TestStateAgent",
+      name: "shared-query",
+      host: "localhost:8787",
+      protocol: "ws",
+      query: queryFn,
+    });
+    cleanups.push(
+      () => first.close(),
+      () => second.close(),
+    );
+
+    first.connect();
+    second.connect();
+
+    await vi.waitFor(() => {
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+    query.resolve({ token: "shared" });
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(2);
+    });
+    expect(MockPartySocket.instances.map((socket) => socket.options.query)).toEqual([
+      { token: "shared" },
+      { token: "shared" },
+    ]);
+  });
+
+  it("records async query errors and can retry with a later refresh", async () => {
+    let fail = true;
+    const queryFn = vi.fn(async () => {
+      if (fail) throw new Error("token expired");
+      return { token: "retried" };
+    });
+    const agent = new Agent({
+      agent: "TestStateAgent",
+      name: "query-retry",
+      host: "localhost:8787",
+      protocol: "ws",
+      query: queryFn,
+    });
+    cleanups.push(() => agent.close());
+
+    agent.connect();
+    await vi.waitFor(() => {
+      expect(agent.queryStatus).toBe("error");
+    });
+
+    expect(agent.queryError?.message).toBe("token expired");
+    expect(MockPartySocket.instances).toHaveLength(0);
+
+    fail = false;
+    agent.refreshQuery();
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(1);
+    });
+
+    expect(latestSocket().options.query).toEqual({ token: "retried" });
+  });
+
+  it("refreshes async query params after a transient close", async () => {
+    let token = 0;
+    const agent = new Agent({
+      agent: "TestStateAgent",
+      name: "query-reconnect",
+      host: "localhost:8787",
+      protocol: "ws",
+      query: async () => ({ token: `token-${++token}` }),
+    });
+    cleanups.push(() => agent.close());
+
+    agent.connect();
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(1);
+    });
+    expect(MockPartySocket.instances[0].options.query).toEqual({ token: "token-1" });
+
+    MockPartySocket.instances[0].dispatchEvent(new CloseEvent("close"));
+
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(2);
+    });
+    expect(MockPartySocket.instances[1].options.query).toEqual({ token: "token-2" });
+    expect(MockPartySocket.instances[0].close).toHaveBeenCalled();
+  });
+
+  it("ignores stale async query results when a newer refresh starts", async () => {
+    const first = deferred<Record<string, string | null>>();
+    const second = deferred<Record<string, string | null>>();
+    const queryFn = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const agent = new Agent({
+      agent: "TestStateAgent",
+      name: "query-stale",
+      host: "localhost:8787",
+      protocol: "ws",
+      query: queryFn,
+    });
+    cleanups.push(() => agent.close());
+
+    agent.connect();
+    agent.refreshQuery();
+
+    first.resolve({ token: "old" });
+    await Promise.resolve();
+    expect(MockPartySocket.instances).toHaveLength(0);
+
+    second.resolve({ token: "new" });
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(1);
+    });
+    expect(latestSocket().options.query).toEqual({ token: "new" });
   });
 
   it("clears connection state and rejects pending RPCs on explicit close", async () => {

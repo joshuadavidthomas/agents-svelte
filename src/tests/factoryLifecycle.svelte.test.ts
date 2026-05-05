@@ -6,11 +6,13 @@ import { AgentChat } from "../chat.svelte.ts";
 import type { VoiceTransport } from "../voice.svelte.ts";
 import FactoryLifecycleHarness from "./FactoryLifecycleHarness.svelte";
 import DirectAgentChatLifecycleHarness from "./DirectAgentChatLifecycleHarness.svelte";
+import AsyncQueryHarness from "./AsyncQueryHarness.svelte";
 
 const { MockPartySocket, resetSockets } = vi.hoisted(() => {
   class MockPartySocket extends EventTarget {
     static instances: MockPartySocket[] = [];
 
+    readonly options: Record<string, unknown>;
     readonly sent: string[] = [];
     readonly send = vi.fn((payload: string) => {
       this.sent.push(payload);
@@ -19,8 +21,9 @@ const { MockPartySocket, resetSockets } = vi.hoisted(() => {
       this.dispatchEvent(new CloseEvent("close"));
     });
 
-    constructor() {
+    constructor(options: Record<string, unknown> = {}) {
       super();
+      this.options = options;
       MockPartySocket.instances.push(this);
       queueMicrotask(() => this.dispatchEvent(new Event("open")));
     }
@@ -138,6 +141,26 @@ describe("factory lifecycle", () => {
 
     expect(socket.close).not.toHaveBeenCalled();
     agent.close();
+  });
+
+  it("refreshes async query params when reactive inputs change", async () => {
+    const query = vi.fn(async (token: string) => ({ token }));
+    const screen = await render(AsyncQueryHarness, { token: "one", query });
+
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(1);
+    });
+    expect(MockPartySocket.instances[0].options.query).toEqual({ token: "one" });
+
+    await screen.rerender({ token: "two", query });
+
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(2);
+    });
+    expect(MockPartySocket.instances[0].close).toHaveBeenCalledTimes(1);
+    expect(MockPartySocket.instances[1].options.query).toEqual({ token: "two" });
+    expect(query).toHaveBeenCalledWith("one");
+    expect(query).toHaveBeenCalledWith("two");
   });
 
   it("closes an owned agent connection when chat setup throws", () => {
