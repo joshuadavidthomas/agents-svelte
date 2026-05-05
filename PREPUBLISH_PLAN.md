@@ -11,19 +11,14 @@ Goal: get `agents-svelte` ready for a first public publish with a small, reliabl
 - `AgentChat.setMessages()` now no-ops after `close()`, matching the other mutators.
 - Public docs were rewritten around the user-facing Svelte API and consistent example setup/validation/deploy sections.
 - The SvelteKit example now documents runtime `PUBLIC_AGENT_HOST` configuration instead of build-only env assignment.
-- `AgentChat.pendingToolCalls` is now derived from `messages` on read instead of synchronized through an internal effect.
+- `AgentChat.pendingToolCalls` remains synchronized from `messages` while retaining reactive public tool-call handles; the derived-only version was rejected because it mutates handle `$state` during derivation.
 - Public examples use explicit `completedUsage` snapshot state so usage/cost updates after a stream completes instead of ticking during streaming.
 - Cross-tab/reconnect replay handling now tracks pending replay streams, clears hydrated assistant parts on replay start, drops stale replay chunks, and collapses duplicate replay text prefixes.
+- The pnpm migration is committed, including `pnpm-lock.yaml`, `pnpm-workspace.yaml`, deleted `package-lock.json` files, and updated root/example package files.
 
 ## Must fix before publish
 
-1. Commit the pnpm migration files.
-
-    Include:
-    - `pnpm-lock.yaml`
-    - `pnpm-workspace.yaml`
-    - deleted `package-lock.json` files
-    - updated root and example `package.json` files
+None currently tracked.
 
 ## Should fix soon
 
