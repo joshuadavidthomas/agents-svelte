@@ -74,11 +74,11 @@ Use factories inside Svelte components. They return reactive controllers immedia
 
 ## Modules
 
-| Subpath               | Main exports                                                                                  |
-| --------------------- | --------------------------------------------------------------------------------------------- |
-| `agents-svelte`       | `Agent`, `createAgent`                                                                        |
-| `agents-svelte/chat`  | `AgentChat`, `AgentChatToolCall`, `createAgentChat`, `getAgentMessages`                       |
-| `agents-svelte/voice` | `VoiceAgent`, `VoiceInput`, `createVoiceAgent`, `createVoiceInput`, `WebSocketVoiceTransport` |
+| Subpath               | Main exports                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `agents-svelte`       | `Agent`, `createAgent`                                                                                              |
+| `agents-svelte/chat`  | `AgentChat`, `AgentChatToolCall`, `AgentToolEvents`, `createAgentChat`, `createAgentToolEvents`, `getAgentMessages` |
+| `agents-svelte/voice` | `VoiceAgent`, `VoiceInput`, `createVoiceAgent`, `createVoiceInput`, `WebSocketVoiceTransport`                       |
 
 ## Lifecycle model
 
@@ -302,6 +302,50 @@ If the loader fails, `chat.initialLoadError` is set and `chat.initialized` still
 By default, `autoContinueAfterToolResult` is `true`: after tool results and approvals, the server continues the conversation and the client resumes that continuation.
 
 Set `autoContinueAfterToolResult: false` when you want client-side continuation instead. In that mode, `AgentChat` uses the AI SDK's `sendAutomaticallyWhen` option after `toolCall.addOutput(...)` and `chat.addToolApprovalResponse(...)`.
+
+## `createAgentToolEvents` / `AgentToolEvents`
+
+`AgentToolEvents` listens for Cloudflare `agent-tool-event` frames on an `Agent` socket. Use it when a parent Agent runs sub-agents as tools and you want to render the child runs next to the parent chat tool call.
+
+```svelte
+<script lang="ts">
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat, createAgentToolEvents } from "agents-svelte/chat";
+
+  const agent = createAgent({ agent: "Assistant", name: "session-1" });
+  const chat = createAgentChat({ agent });
+  const toolEvents = createAgentToolEvents({ agent });
+</script>
+
+{#each chat.messages as message}
+  {#each message.parts as part}
+    {#if "toolCallId" in part}
+      {@const runs = toolEvents.getRunsForToolCall(part.toolCallId)}
+      {#each runs as run}
+        <section>
+          <h3>{run.agentType}</h3>
+          <p>{run.status}</p>
+        </section>
+      {/each}
+    {/if}
+  {/each}
+{/each}
+```
+
+Reactive fields:
+
+- `toolEvents.runsById`
+- `toolEvents.runsByToolCallId`
+- `toolEvents.unboundRuns`
+
+Methods:
+
+- `toolEvents.getRunsForToolCall(toolCallId)`
+- `toolEvents.resetLocalState()`
+- `toolEvents.connect()`
+- `toolEvents.close()`
+
+The state shape matches the Cloudflare Agents SDK reducer: runs are keyed by run id, grouped by parent tool call id, and unbound runs are kept separately. Duplicate replay frames are ignored locally.
 
 ## `createVoiceAgent` / `VoiceAgent`
 

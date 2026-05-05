@@ -16,6 +16,7 @@ Goal: get `agents-svelte` ready for a first public publish with a small, reliabl
 - Cross-tab/reconnect replay handling now tracks pending replay streams, clears hydrated assistant parts on replay start, drops stale replay chunks, and collapses duplicate replay text prefixes.
 - `addToolApprovalResponse` no longer accepts a local-only `reason`; the public API now matches the Cloudflare approval wire protocol.
 - Async Agent query params now resolve before socket creation, dedupe concurrent resolutions, expose reactive query status/errors, refresh on disconnect, and support TTL-based refresh without React-style dependency arrays.
+- `AgentToolEvents` now provides a Svelte runes-class equivalent of upstream `useAgentToolEvents`, including grouped sub-agent runs, unbound runs, replay dedupe, reset, and socket reattach after Agent reconnect.
 - The pnpm migration is committed, including `pnpm-lock.yaml`, `pnpm-workspace.yaml`, deleted `package-lock.json` files, and updated root/example package files.
 
 ## Must fix before publish
@@ -24,11 +25,7 @@ None currently tracked.
 
 ## Should fix soon
 
-These are not launch blockers for an experimental `0.1.0`, but they are worth addressing before the API settles.
-
-1. Add a Svelte equivalent of `useAgentToolEvents`.
-
-    Upstream exposes sub-agent tool run events. This matters most for multi-agent chat patterns.
+None currently tracked.
 
 ## Keep as-is
 

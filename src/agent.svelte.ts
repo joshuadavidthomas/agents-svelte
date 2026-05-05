@@ -1,4 +1,4 @@
-import { onDestroy, onMount } from "svelte";
+import { onDestroy, onMount, untrack } from "svelte";
 import PartySocket from "partysocket";
 import type {
   AgentPromiseReturnType,
@@ -139,7 +139,7 @@ export interface IdentityChange {
 export class Agent<AgentT = unknown, State = unknown> {
   readonly path: ReadonlyArray<AgentRouteSegment>;
 
-  #socket: PartySocket | null = null;
+  #connection = $state<{ socket: PartySocket | null }>({ socket: null });
 
   state = $state<State | undefined>(undefined);
   identity = $state<Identity>({
@@ -206,7 +206,7 @@ export class Agent<AgentT = unknown, State = unknown> {
   }
 
   get socket(): PartySocket | null {
-    return this.#socket;
+    return this.#connection.socket;
   }
 
   #resolveConnectionOptions(): { host: string; route: string; subPath?: string; httpUrl: string } {
@@ -243,7 +243,7 @@ export class Agent<AgentT = unknown, State = unknown> {
 
   connect(): void {
     this.#started = true;
-    if (this.#socket || this.#connecting) return;
+    if (untrack(() => this.#connection.socket || this.#connecting)) return;
 
     if (typeof this.#options.query !== "function") {
       this.queryStatus = this.#options.query ? "ready" : "idle";
@@ -284,7 +284,7 @@ export class Agent<AgentT = unknown, State = unknown> {
     this.#connecting = true;
     try {
       const query = await this.#resolveQuery(generation);
-      if (generation !== this.#connectionGeneration || !this.#started || this.#socket) {
+      if (generation !== this.#connectionGeneration || !this.#started || this.#connection.socket) {
         return;
       }
       this.#openSocket(query);
@@ -373,16 +373,16 @@ export class Agent<AgentT = unknown, State = unknown> {
     socket.addEventListener("open", this.#handleOpen);
     socket.addEventListener("close", this.#handleClose);
     socket.addEventListener("error", this.#handleError);
-    this.#socket = socket;
+    this.#connection.socket = socket;
   }
 
   #replaceSocket(query: QueryObject | undefined, generation: number): void {
     if (generation !== this.#connectionGeneration) {
       return;
     }
-    if (this.#socket) {
-      this.#detachSocket(this.#socket, true);
-      this.#socket = null;
+    if (this.#connection.socket) {
+      this.#detachSocket(this.#connection.socket, true);
+      this.#connection.socket = null;
       this.#markClosed();
     }
     this.#openSocket(query);
@@ -411,10 +411,10 @@ export class Agent<AgentT = unknown, State = unknown> {
     this.#connecting = false;
     this.#connectionGeneration++;
     this.#clearQueryRefreshTimer();
-    if (!this.#socket) return;
-    const socket = this.#socket;
+    if (!this.#connection.socket) return;
+    const socket = this.#connection.socket;
     this.#detachSocket(socket, true);
-    this.#socket = null;
+    this.#connection.socket = null;
     this.#markClosed();
   }
 
@@ -514,13 +514,13 @@ export class Agent<AgentT = unknown, State = unknown> {
   #handleClose = (_e: CloseEvent) => {
     this.#markClosed();
 
-    if (typeof this.#options.query !== "function" || !this.#started || !this.#socket) {
+    if (typeof this.#options.query !== "function" || !this.#started || !this.#connection.socket) {
       return;
     }
 
-    const socket = this.#socket;
+    const socket = this.#connection.socket;
     this.#detachSocket(socket, true);
-    this.#socket = null;
+    this.#connection.socket = null;
     deleteCachedQuery(this.#queryCacheKey());
     this.#clearQueryRefreshTimer();
     const generation = ++this.#connectionGeneration;
@@ -570,10 +570,10 @@ export class Agent<AgentT = unknown, State = unknown> {
   }
 
   #requireSocket(operation: string): PartySocket {
-    if (!this.#socket) {
+    if (!this.#connection.socket) {
       throw new Error(`[agents-svelte] ${operation} requires a connected Agent`);
     }
-    return this.#socket;
+    return this.#connection.socket;
   }
 
   #markClosed(): void {

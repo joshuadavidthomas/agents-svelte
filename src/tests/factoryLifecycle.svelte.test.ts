@@ -7,6 +7,7 @@ import type { VoiceTransport } from "../voice.svelte.ts";
 import FactoryLifecycleHarness from "./FactoryLifecycleHarness.svelte";
 import DirectAgentChatLifecycleHarness from "./DirectAgentChatLifecycleHarness.svelte";
 import AsyncQueryHarness from "./AsyncQueryHarness.svelte";
+import AgentToolEventsHarness from "./AgentToolEventsHarness.svelte";
 
 const { MockPartySocket, resetSockets } = vi.hoisted(() => {
   class MockPartySocket extends EventTarget {
@@ -161,6 +162,48 @@ describe("factory lifecycle", () => {
     expect(MockPartySocket.instances[1].options.query).toEqual({ token: "two" });
     expect(query).toHaveBeenCalledWith("one");
     expect(query).toHaveBeenCalledWith("two");
+  });
+
+  it("reattaches agent tool events when the Agent socket is replaced", async () => {
+    const screen = await render(AgentToolEventsHarness);
+
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(1);
+    });
+    const first = MockPartySocket.instances[0];
+
+    first.dispatchEvent(new CloseEvent("close"));
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(2);
+    });
+    const second = MockPartySocket.instances[1];
+
+    first.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "agent-tool-event",
+          sequence: 0,
+          event: { kind: "started", runId: "old", agentType: "Researcher", order: 0 },
+        }),
+      }),
+    );
+    second.dispatchEvent(
+      new MessageEvent("message", {
+        data: JSON.stringify({
+          type: "agent-tool-event",
+          sequence: 0,
+          event: { kind: "started", runId: "new", agentType: "Researcher", order: 0 },
+        }),
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(
+        screen.container.querySelector("[data-run-count]")?.getAttribute("data-run-count"),
+      ).toBe("1");
+    });
+    expect(screen.container.textContent).toContain("new");
+    expect(screen.container.textContent).not.toContain("old");
   });
 
   it("closes an owned agent connection when chat setup throws", () => {
