@@ -32,17 +32,9 @@
   const MODEL_ID = "@cf/google/gemma-4-26b-a4b-it";
   const MODEL_INPUT_COST_PER_MILLION = 0.1;
   const MODEL_OUTPUT_COST_PER_MILLION = 0.3;
+  const emptyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0, estimated: true };
 
-  const emptyUsage = {
-    inputTokens: 0,
-    outputTokens: 0,
-    totalTokens: 0,
-    cost: 0,
-    estimated: true,
-  };
-
-  let usage = $state({ ...emptyUsage });
-
+  let completedUsage = $state({ ...emptyUsage });
   let wasStreaming = $state(false);
 
   $effect(() => {
@@ -52,13 +44,13 @@
     }
 
     if (wasStreaming) {
-      usage = calculateUsage();
+      completedUsage = calculateUsage();
       wasStreaming = false;
     }
   });
 
   const formattedCost = $derived(
-    usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`,
+    completedUsage.cost === 0 ? "$0.000000" : `$${completedUsage.cost.toFixed(6)}`,
   );
 
   function calculateUsage() {
@@ -136,7 +128,7 @@
 
   function startNewChat() {
     chat.clearHistory();
-    usage = { ...emptyUsage };
+    completedUsage = { ...emptyUsage };
     wasStreaming = false;
     cancelledMessageIds = new Set();
   }
@@ -179,10 +171,10 @@
           class="usage-meta"
           title="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens"
         >
-          <span>{usage.inputTokens.toLocaleString()} in</span>
-          <span>{usage.outputTokens.toLocaleString()} out</span>
+          <span>{completedUsage.inputTokens.toLocaleString()} in</span>
+          <span>{completedUsage.outputTokens.toLocaleString()} out</span>
           <strong>{formattedCost}</strong>
-          {#if usage.estimated}<em>est.</em>{/if}
+          {#if completedUsage.estimated}<em>est.</em>{/if}
         </div>
       </div>
       <div class="route-meta">

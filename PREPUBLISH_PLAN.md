@@ -11,21 +11,13 @@ Goal: get `agents-svelte` ready for a first public publish with a small, reliabl
 - `AgentChat.setMessages()` now no-ops after `close()`, matching the other mutators.
 - Public docs were rewritten around the user-facing Svelte API and consistent example setup/validation/deploy sections.
 - The SvelteKit example now documents runtime `PUBLIC_AGENT_HOST` configuration instead of build-only env assignment.
+- `AgentChat.pendingToolCalls` is now derived from `messages` on read instead of synchronized through an internal effect.
+- Public examples use explicit `completedUsage` snapshot state so usage/cost updates after a stream completes instead of ticking during streaming.
+- Cross-tab/reconnect replay handling now tracks pending replay streams, clears hydrated assistant parts on replay start, drops stale replay chunks, and collapses duplicate replay text prefixes.
 
 ## Must fix before publish
 
-1. Fix cross-tab broadcast replay parity.
-
-    The Svelte chat path forwards replay chunks directly through `broadcastTransition`. Upstream React tracks pending replay request IDs and resets matching hydrated assistant messages before applying replay.
-
-    Risk: a second tab opened during an active stream can show duplicate or stale assistant content.
-
-    Files:
-    - `src/chat-transport.ts`
-    - `src/chat.svelte.ts`
-    - upstream reference: `~/projects/cloudflare/agents/packages/ai-chat/src/react.tsx`
-
-2. Commit the pnpm migration files.
+1. Commit the pnpm migration files.
 
     Include:
     - `pnpm-lock.yaml`
@@ -47,15 +39,7 @@ These are not launch blockers for an experimental `0.1.0`, but they are worth ad
 
     Upstream exposes sub-agent tool run events. This matters most for multi-agent chat patterns.
 
-3. Rework `AgentChat.pendingToolCalls` toward derived state.
-
-    It is currently maintained by an internal effect from `messages`. A more idiomatic Svelte design would derive pending tool calls from `messages`, with a small cache only if object identity needs to be preserved.
-
-4. Improve example usage derivation.
-
-    Several examples use `$state + $effect` for usage totals that are pure functions of `chat.messages`. Prefer `$derived.by(...)` unless intentionally storing a completed-stream snapshot.
-
-5. Clarify or remove local-only approval `reason`.
+3. Clarify or remove local-only approval `reason`.
 
     `addToolApprovalResponse({ reason })` applies `reason` locally, but the wire protocol does not send it. Server updates may overwrite it.
 

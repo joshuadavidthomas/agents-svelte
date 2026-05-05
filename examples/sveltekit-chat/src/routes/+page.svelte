@@ -25,12 +25,12 @@
   const chat = createAgentChat({ agent });
 
   let input = $state("");
-  let usage = $state({ ...emptyUsage });
+  let completedUsage = $state({ ...emptyUsage });
   let wasStreaming = $state(false);
   let scrollContainer = $state<HTMLElement | null>(null);
 
   const connectedText = $derived(agent.identity.identified ? "connected" : agent.connected ? "connecting" : "offline");
-  const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
+  const formattedCost = $derived(completedUsage.cost === 0 ? "$0.000000" : `$${completedUsage.cost.toFixed(6)}`);
   const scrollTrigger = $derived(`${chat.messages.length}:${chat.isStreaming}`);
 
   $effect(() => {
@@ -40,7 +40,7 @@
     }
 
     if (wasStreaming) {
-      usage = calculateUsage();
+      completedUsage = calculateUsage();
       wasStreaming = false;
     }
   });
@@ -59,7 +59,8 @@
 
   function clear() {
     chat.clearHistory();
-    usage = { ...emptyUsage };
+    completedUsage = { ...emptyUsage };
+    wasStreaming = false;
     input = "";
   }
 
@@ -129,7 +130,7 @@
     <header class="toolbar">
       <div>
         <h2>Messages</h2>
-        <p>{usage.totalTokens} tokens{usage.estimated ? " estimated" : " reported"} · {formattedCost}</p>
+        <p>{completedUsage.totalTokens} tokens{completedUsage.estimated ? " estimated" : " reported"} · {formattedCost}</p>
       </div>
       <div class="actions">
         {#if chat.isStreaming}

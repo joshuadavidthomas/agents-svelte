@@ -39,7 +39,7 @@
   let memoryDraft = $state("");
   let memorySaved = $state(false);
   let scrollContainer = $state<HTMLElement>();
-  let usage = $state({ ...emptyUsage });
+  let completedUsage = $state({ ...emptyUsage });
   let wasStreaming = $state(false);
 
   const chats = $derived(inbox.state?.chats ?? []);
@@ -69,7 +69,7 @@
       return;
     }
     if (wasStreaming) {
-      usage = calculateUsage();
+      completedUsage = calculateUsage();
       wasStreaming = false;
     }
   });
@@ -80,7 +80,7 @@
     requestAnimationFrame(() => scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight }));
   });
 
-  const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
+  const formattedCost = $derived(completedUsage.cost === 0 ? "$0.000000" : `$${completedUsage.cost.toFixed(6)}`);
 
   async function createChat() {
     const id = await inbox.stub.createChat();
@@ -124,7 +124,7 @@
     chat?.close();
     chatAgent?.close();
     activeId = id;
-    usage = { ...emptyUsage };
+    completedUsage = { ...emptyUsage };
     wasStreaming = false;
 
     if (!id) {
@@ -248,10 +248,10 @@
       <footer class="sidebar-footer">
         <code>{MODEL_ID}</code>
         <div class="usage-meta" title="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens">
-          <span>{usage.inputTokens.toLocaleString()} in</span>
-          <span>{usage.outputTokens.toLocaleString()} out</span>
+          <span>{completedUsage.inputTokens.toLocaleString()} in</span>
+          <span>{completedUsage.outputTokens.toLocaleString()} out</span>
           <strong>{formattedCost}</strong>
-          {#if usage.estimated}<em>est.</em>{/if}
+          {#if completedUsage.estimated}<em>est.</em>{/if}
         </div>
         <div class="usage-meta"><span>{chat?.status === "submitted" ? "Thinking" : chat?.isStreaming ? "Streaming" : "Idle"}</span></div>
       </footer>
