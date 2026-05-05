@@ -1116,6 +1116,222 @@ describe("createAgentChat — server-initiated messages", () => {
   });
 });
 
+describe("createAgentChat — replay parity", () => {
+  function seededReplayChat(mock: MockAgent) {
+    return makeChat(mock, {
+      resume: true,
+      initialMessages: [
+        {
+          id: "asst-1",
+          role: "assistant",
+          parts: [{ type: "text", text: "old hydrated" }],
+        },
+      ],
+    });
+  }
+
+  async function finishInitialResume(mock: MockAgent) {
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
+    });
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    flushSync();
+    mock.sent.length = 0;
+    mock.sentMessages.length = 0;
+  }
+
+  it("clears hydrated assistant parts when replay starts for the same message", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "replay-1" });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-1",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    expect(chat.messages).toHaveLength(1);
+    expect(chat.messages[0]?.id).toBe("asst-1");
+    expect(chat.messages[0]?.parts).toEqual([]);
+  });
+
+  it("rebuilds replayed text without retaining hydrated text", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "replay-2" });
+    for (const body of [
+      '{"type":"start","messageId":"asst-1"}',
+      '{"type":"text-start","id":"text-1"}',
+      '{"type":"text-delta","id":"text-1","delta":"new"}',
+      '{"type":"text-delta","id":"text-1","delta":" content"}',
+      '{"type":"text-end","id":"text-1"}',
+    ]) {
+      mock.dispatchServerMessage({
+        type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+        id: "replay-2",
+        replay: true,
+        body,
+      });
+    }
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-2",
+      replay: true,
+      replayComplete: true,
+      done: true,
+      body: "",
+    });
+    flushSync();
+
+    expect(JSON.stringify(chat.messages)).not.toContain("old hydrated");
+    expect(chat.messages[0]?.parts).toEqual([{ type: "text", text: "new content", state: "done" }]);
+  });
+
+  it("drops replay chunks without a prior stream-resuming message", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "stale-replay",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    expect(chat.messages[0]?.parts).toEqual([{ type: "text", text: "old hydrated" }]);
+    expect(chat.isServerStreaming).toBe(false);
+  });
+
+  it("clears replay pending state after replay completes", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "replay-3" });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-3",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-3",
+      replay: true,
+      replayComplete: true,
+      done: true,
+      body: "",
+    });
+    flushSync();
+
+    chat.messages = [
+      { id: "asst-1", role: "assistant", parts: [{ type: "text", text: "rebuilt" }] },
+    ];
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-3",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    expect(chat.messages[0]?.parts).toEqual([{ type: "text", text: "rebuilt" }]);
+  });
+
+  it("clearHistory wipes pending replay state", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "replay-clear" });
+    flushSync();
+    chat.clearHistory();
+    flushSync();
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-clear",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    expect(chat.messages).toEqual([]);
+  });
+
+  it("local resume replay clears hydrated assistant parts", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
+    });
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "local-replay" });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "local-replay",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    expect(chat.messages[0]?.parts).toEqual([]);
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toMatchObject({
+      id: "local-replay",
+    });
+  });
+
+  it("collapses hydrated replay text prefixes", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: "replay-collapse",
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-collapse",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_MESSAGE_UPDATED,
+      message: {
+        id: "asst-1",
+        role: "assistant",
+        parts: [
+          { type: "text", text: "Hello" },
+          { type: "text", text: "Hello, world" },
+        ],
+      },
+    });
+    flushSync();
+
+    await vi.waitFor(() => {
+      expect(chat.messages[0]?.parts).toEqual([{ type: "text", text: "Hello, world" }]);
+    });
+  });
+});
+
 describe("createAgentChat — pendingToolCalls", () => {
   it("exposes input-available tool parts as reactive tool call handles", async () => {
     const mock = createMockAgent();

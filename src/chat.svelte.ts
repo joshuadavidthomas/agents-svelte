@@ -217,6 +217,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   #ownsAgentConnection = false;
   #closed = false;
   readonly #continuationStreamsSeeded = new Set<string>();
+  readonly #observedBroadcastResumes = new Set<string>();
+  readonly #replayHydratedAssistantIds = new Set<string>();
   #clientContinuationPromise: Promise<void> | null = null;
   #clientContinuationRequested = false;
   #cleanupPendingToolCallsEffect: (() => void) | null = null;
@@ -330,6 +332,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#cleanupPendingToolCallsEffect = $effect.root(() => {
       $effect(() => {
         this.#syncPendingToolCalls();
+      });
+
+      $effect(() => {
+        this.#collapseHydratedReplayTextParts();
       });
     });
   }
@@ -491,6 +497,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#toolCalls.clear();
     this.#pendingToolCalls = [];
     this.#protectedStreamingAssistant = null;
+    this.#observedBroadcastResumes.clear();
+    this.#replayHydratedAssistantIds.clear();
   }
 
   #startToolContinuation(): void {
@@ -506,6 +514,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   #resetStreamState(): void {
     this.#streamState.current = { status: "idle" } as BroadcastStreamState;
     this.#continuationStreamsSeeded.clear();
+    this.#observedBroadcastResumes.clear();
     this.isServerStreaming = false;
   }
 
@@ -570,12 +579,12 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
     const last = this.messages[this.messages.length - 1];
     if (!last || last.role !== "assistant") {
-      this.#pendingToolCalls = [];
       for (const toolCallId of this.#toolCalls.keys()) {
         if (!currentToolCallIds.has(toolCallId)) {
           this.#toolCalls.delete(toolCallId);
         }
       }
+      this.#pendingToolCalls = [];
       return;
     }
 
@@ -892,6 +901,65 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     );
   }
 
+  #resetHydratedAssistantForReplay(messageId: string): void {
+    const last = this.messages.at(-1);
+    if (last?.role !== "assistant" || last.id !== messageId) {
+      return;
+    }
+
+    this.messages = [
+      ...this.messages.slice(0, -1),
+      {
+        ...last,
+        parts: [],
+      } as M,
+    ];
+    this.#replayHydratedAssistantIds.add(messageId);
+  }
+
+  #collapseHydratedReplayTextParts(): void {
+    if (this.#replayHydratedAssistantIds.size === 0) {
+      return;
+    }
+
+    let changed = false;
+    const messages = this.messages.map((message) => {
+      if (!this.#replayHydratedAssistantIds.has(message.id)) {
+        return message;
+      }
+
+      const parts = message.parts;
+      const nextParts = parts.filter((_, index) => !this.#isHydratedReplayTextPrefix(parts, index));
+      if (nextParts.length === parts.length) {
+        return message;
+      }
+
+      changed = true;
+      return { ...message, parts: nextParts } as M;
+    });
+
+    if (changed) {
+      this.messages = messages;
+    }
+  }
+
+  #isHydratedReplayTextPrefix(parts: M["parts"], index: number): boolean {
+    const text = this.#textPartText(parts[index]);
+    return (
+      text !== null &&
+      parts.slice(index + 1).some((part) => {
+        const laterText = this.#textPartText(part);
+        return laterText !== null && laterText !== text && laterText.startsWith(text);
+      })
+    );
+  }
+
+  #textPartText(part: M["parts"][number] | undefined): string | null {
+    return part?.type === "text" && "text" in part && typeof part.text === "string"
+      ? part.text
+      : null;
+  }
+
   #sendToolOutputToServer(
     toolCallId: string,
     toolName: string,
@@ -935,6 +1003,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
       case "messages-replaced":
         this.messages = this.#preserveProtectedStreamingAssistant(event.messages);
+        this.#collapseHydratedReplayTextParts();
         break;
 
       case "message-updated": {
@@ -963,11 +1032,13 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           const next = [...prev];
           next[idx] = { ...updated, id: prev[idx].id };
           this.messages = next;
+          this.#collapseHydratedReplayTextParts();
         }
         break;
       }
 
       case "broadcast-resume":
+        this.#observedBroadcastResumes.add(event.streamId);
         this.#streamState.current = broadcastTransition(this.#streamState.current, {
           type: "resume-fallback",
           streamId: event.streamId,
@@ -977,6 +1048,14 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         break;
 
       case "broadcast-response": {
+        if (
+          event.replay &&
+          this.#streamState.current.status !== "observing" &&
+          !this.#observedBroadcastResumes.has(event.streamId)
+        ) {
+          return;
+        }
+
         if (event.continuation && !this.#continuationStreamsSeeded.has(event.streamId)) {
           this.#streamState.current = { status: "idle" } as BroadcastStreamState;
           this.#continuationStreamsSeeded.add(event.streamId);
@@ -1000,13 +1079,19 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         if (result.messagesUpdate) {
           const updater = result.messagesUpdate as unknown as (prev: M[]) => M[];
           this.messages = updater(this.messages);
+          this.#collapseHydratedReplayTextParts();
         }
         this.isServerStreaming = result.isStreaming;
-        if (event.done) {
+        if (event.done || event.replayComplete || event.error) {
           this.#continuationStreamsSeeded.delete(event.streamId);
+          this.#observedBroadcastResumes.delete(event.streamId);
         }
         break;
       }
+
+      case "replay-hydrated-reset":
+        this.#resetHydratedAssistantForReplay(event.messageId);
+        break;
 
       case "assistant-tail-released":
         this.#restoreProtectedStreamingAssistant(event.messageId);

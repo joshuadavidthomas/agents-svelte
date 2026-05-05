@@ -25,6 +25,7 @@ export type AgentChatTransportEvent<ChatMessage extends UIMessage = UIMessage> =
   | { type: "messages-replaced"; messages: ChatMessage[] }
   | { type: "message-updated"; message: ChatMessage }
   | { type: "broadcast-resume"; streamId: string }
+  | { type: "replay-hydrated-reset"; messageId: string }
   | {
       type: "broadcast-response";
       streamId: string;
@@ -87,6 +88,7 @@ export class AgentChatTransport<
   readonly #activeStreams = new Map<string, ActiveStreamSession>();
   readonly #ignoredRequestIds = new Set<string>();
   readonly #assistantMessageIds = new Map<string, string>();
+  readonly #pendingReplayStreamIds = new Set<string>();
 
   #pendingResume: PendingResume | null = null;
   #expectToolContinuation = false;
@@ -138,6 +140,7 @@ export class AgentChatTransport<
     this.#pendingResume?.cancel();
     this.#pendingResume = null;
     this.#abortActiveContinuation = null;
+    this.#pendingReplayStreamIds.clear();
 
     for (const [requestId, session] of this.#activeStreams) {
       try {
@@ -331,6 +334,7 @@ export class AgentChatTransport<
     this.#activeStreams.clear();
     this.#ignoredRequestIds.clear();
     this.#assistantMessageIds.clear();
+    this.#pendingReplayStreamIds.clear();
   }
 
   #createToolContinuationStream(): ReadableStream<UIMessageChunk> {
@@ -524,6 +528,7 @@ export class AgentChatTransport<
     const requestId = data.id;
 
     if (this.#pendingResume) {
+      this.#pendingReplayStreamIds.add(requestId);
       this.#pendingResume.accept(requestId);
       return;
     }
@@ -536,6 +541,7 @@ export class AgentChatTransport<
       return;
     }
 
+    this.#pendingReplayStreamIds.add(requestId);
     this.#sendResumeAck(requestId);
     this.#onEvent?.({ type: "broadcast-resume", streamId: requestId });
   }
@@ -545,6 +551,11 @@ export class AgentChatTransport<
     const chunkData = this.#parseChunk(data.body);
     if (chunkData !== undefined) {
       this.#rememberLocalMessageId(requestId, chunkData);
+      this.#maybeEmitReplayHydratedReset(requestId, data.replay, chunkData);
+    }
+
+    if (data.done || data.error || data.replayComplete) {
+      this.#pendingReplayStreamIds.delete(requestId);
     }
 
     const session = this.#activeStreams.get(requestId);
@@ -646,6 +657,28 @@ export class AgentChatTransport<
 
   #isReasoningEnd(chunk: UIMessageChunk): chunk is UIMessageChunk & { id: string } {
     return chunk.type === "reasoning-end" && "id" in chunk && typeof chunk.id === "string";
+  }
+
+  #maybeEmitReplayHydratedReset(
+    requestId: string,
+    replay: boolean | undefined,
+    chunkData: unknown,
+  ): void {
+    if (
+      !replay ||
+      !this.#pendingReplayStreamIds.has(requestId) ||
+      typeof chunkData !== "object" ||
+      chunkData === null ||
+      !("type" in chunkData) ||
+      chunkData.type !== "start" ||
+      !("messageId" in chunkData) ||
+      typeof chunkData.messageId !== "string"
+    ) {
+      return;
+    }
+
+    this.#pendingReplayStreamIds.delete(requestId);
+    this.#onEvent?.({ type: "replay-hydrated-reset", messageId: chunkData.messageId });
   }
 
   #rememberLocalMessageId(requestId: string, chunkData: unknown): void {
