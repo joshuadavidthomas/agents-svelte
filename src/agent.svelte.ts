@@ -22,6 +22,38 @@ type AgentRouteSegment = {
 
 type SubAgentRoute = AgentRouteSegment;
 
+function normalizeHost(host: string): string {
+  return host.replace(/^(http|https|ws|wss):\/\//, "").replace(/\/$/, "");
+}
+
+function hostnameFromHost(host: string): string {
+  try {
+    return new URL(`http://${host}`).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return host.split(":")[0] ?? host;
+  }
+}
+
+function isLocalHost(host: string): boolean {
+  const hostname = hostnameFromHost(host);
+  if (["localhost", "127.0.0.1", "::1", "::ffff:7f00:1"].includes(hostname)) {
+    return true;
+  }
+
+  const octets = hostname.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) {
+    return false;
+  }
+
+  const [first, second] = octets;
+  return (
+    first === 10 ||
+    first === 127 ||
+    (first === 192 && second === 168) ||
+    (first === 172 && second >= 16 && second <= 31)
+  );
+}
+
 export interface CreateAgentOptions {
   agent: string;
   name?: string;
@@ -123,10 +155,6 @@ export class Agent<AgentT = unknown, State = unknown> {
       })) ?? []),
     ];
 
-    if (agentNamespace !== agentNamespace.toLowerCase()) {
-      console.warn(`[agents-svelte] Agent namespace should be lowercase. Got: ${agentNamespace}`);
-    }
-
     this.identity = {
       name: this.path.at(-1)?.name ?? roomName,
       agent: this.path.at(-1)?.agent ?? agentNamespace,
@@ -162,26 +190,19 @@ export class Agent<AgentT = unknown, State = unknown> {
       host = window.location.host;
     }
 
-    let normalizedHost = host.replace(/^(http|https|ws|wss):\/\//, "");
-    normalizedHost = normalizedHost.endsWith("/") ? normalizedHost.slice(0, -1) : normalizedHost;
-    const socketProtocol =
-      options.protocol ??
-      (normalizedHost.startsWith("localhost:") ||
-      normalizedHost.startsWith("127.0.0.1:") ||
-      normalizedHost.startsWith("192.168.") ||
-      normalizedHost.startsWith("10.") ||
-      (normalizedHost.startsWith("172.") &&
-        normalizedHost.split(".")[1] >= "16" &&
-        normalizedHost.split(".")[1] <= "31") ||
-      normalizedHost.startsWith("[::ffff:7f00:1]:")
-        ? "ws"
-        : "wss");
+    const normalizedHost = normalizeHost(host);
+    const socketProtocol = options.protocol ?? (isLocalHost(normalizedHost) ? "ws" : "wss");
     const httpProtocol = socketProtocol === "wss" ? "https" : "http";
     const path = options.path ? `/${options.path}` : "";
     const route = options.basePath
       ? options.basePath
       : [prefix, agentNamespace, roomName, subPath].filter(Boolean).join("/");
-    return { host, route, subPath, httpUrl: `${httpProtocol}://${normalizedHost}/${route}${path}` };
+    return {
+      host: normalizedHost,
+      route,
+      subPath,
+      httpUrl: `${httpProtocol}://${normalizedHost}/${route}${path}`,
+    };
   }
 
   connect(): void {

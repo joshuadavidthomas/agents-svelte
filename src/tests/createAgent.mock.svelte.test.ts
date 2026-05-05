@@ -150,6 +150,40 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     expect(agent.getHttpUrl()).toBe("http://localhost:8787/custom-state/session-1");
   });
 
+  it("passes normalized hosts to PartySocket and HTTP URL generation", () => {
+    const agent = makeAgent({
+      agent: "TestStateAgent",
+      host: "https://example.com/",
+      name: "session-1",
+    });
+    const socket = latestSocket();
+
+    expect(socket.options.host).toBe("example.com");
+    expect(agent.getHttpUrl()).toBe("https://example.com/agents/test-state-agent/session-1");
+  });
+
+  it("uses ws for local hosts without requiring a port", () => {
+    const agent = makeAgent({
+      agent: "TestStateAgent",
+      host: "localhost",
+      name: "session-1",
+    });
+    const socket = latestSocket();
+
+    expect(socket.options.protocol).toBeUndefined();
+    expect(agent.getHttpUrl()).toBe("http://localhost/agents/test-state-agent/session-1");
+  });
+
+  it("uses ws for private IPv4 hosts with numeric octet checks", () => {
+    const agent = makeAgent({
+      agent: "TestStateAgent",
+      host: "172.16.0.2:8787",
+      name: "session-1",
+    });
+
+    expect(agent.getHttpUrl()).toBe("http://172.16.0.2:8787/agents/test-state-agent/session-1");
+  });
+
   it("marks identity un-identified on close", () => {
     const agent = makeAgent({
       agent: "TestStateAgent",

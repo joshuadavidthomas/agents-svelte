@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@ai-sdk/svelte": "^4.0.0",
-    "@cloudflare/ai-chat": ">=0.3.2 <1.0.0",
-    "agents": ">=0.9.0 <1.0.0",
-    "agents-svelte": "file:../..",
+    "@cloudflare/ai-chat": ">=0.6.2 <1.0.0",
+    "agents": ">=0.12.3 <1.0.0",
+    "agents-svelte": "workspace:*",
     "ai": "^6.0.0",
     "partysocket": "^1.0.0",
     "svelte": "^5.0.0",
@@ -26,5 +26,6 @@
     "typescript": "^6.0.3",
     "vite": "^8.0.8",
     "wrangler": "^4.83.0"
-  }
+  },
+  "packageManager": "pnpm@10.33.0"
 }

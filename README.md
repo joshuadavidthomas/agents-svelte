@@ -1,81 +1,110 @@
 # agents-svelte
 
-Community Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/agents).
+Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/agents).
 
-This package is not maintained by Cloudflare. It is intentionally **not** a hook-shaped port of the React API. It uses Svelte 5 idioms:
+`agents-svelte` gives Svelte apps reactive controllers for Cloudflare Agents, AI chat, and voice. It is a community package, not an official Cloudflare package. The API is experimental and may change before `1.0`.
 
-- `.svelte.ts` modules
-- classes with reactive fields
-- `createX(...)` factory helpers
-- automatic cleanup via `onDestroy(...)` when created inside a component
+## What you get
 
-## Status
+- `createAgent(...)` for Agent state, identity, RPC, and WebSocket lifecycle
+- `createAgentChat(...)` for AI SDK chat over the Cloudflare Agents chat transport
+- `createVoiceAgent(...)` and `createVoiceInput(...)` for Cloudflare voice clients
+- SSR-safe constructors for SvelteKit components
+- Svelte 5 reactive fields instead of React hooks and callback-heavy APIs
 
-Experimental. The API may change before `1.0`.
-
-This package ships source-only for now. Consumers need Svelte 5 tooling that can compile `.svelte.ts` files, such as Vite with `@sveltejs/vite-plugin-svelte`. TypeScript consumers should use bundler-style module resolution.
+This package ships source-only for now. Your app needs Svelte 5 tooling that can compile `.svelte.ts` files, such as Vite with `@sveltejs/vite-plugin-svelte`. TypeScript projects should use bundler-style module resolution.
 
 ## Install
 
+For Agent state/RPC:
+
 ```bash
-npm install agents-svelte agents partysocket svelte
+pnpm add agents-svelte agents partysocket svelte
 ```
 
 For chat, also install:
 
 ```bash
-npm install @ai-sdk/svelte @cloudflare/ai-chat ai
+pnpm add @ai-sdk/svelte @cloudflare/ai-chat ai
 ```
 
 For voice, also install:
 
 ```bash
-npm install @cloudflare/voice
+pnpm add @cloudflare/voice
 ```
 
-## Examples
+## Quick start
 
-- `examples/basic-chat` — minimal Svelte chat app with an `AIChatAgent`
-- `examples/tool-calls` — client-side tools resolved through Svelte tool-call handles
-- `examples/multi-ai-chat` — inbox agent with chat sub-agents and shared memory
-- `examples/human-in-the-loop` — AI SDK tool approval flow
-- `examples/voice-input` — dictation-focused voice input
-- `examples/voice-agent` — conversational voice agent with optional WebRTC/SFU path
-- `examples/sveltekit-chat` — SvelteKit SSR route using Agent factories safely during component setup
+Use factories inside Svelte components. They return reactive controllers immediately, connect after browser mount, and close automatically on component destroy.
+
+```svelte
+<script lang="ts">
+  import { createAgent } from "agents-svelte";
+  import { createAgentChat } from "agents-svelte/chat";
+
+  const agent = createAgent({ agent: "ChatAgent", name: "default" });
+  const chat = createAgentChat({ agent });
+
+  let input = $state("");
+
+  function send() {
+    const text = input.trim();
+    if (!text || chat.isStreaming) return;
+    chat.sendMessage({ text });
+    input = "";
+  }
+</script>
+
+{#each chat.messages as message (message.id)}
+  <article class={message.role}>
+    {#each message.parts as part}
+      {#if part.type === "text"}
+        <p>{part.text}</p>
+      {/if}
+    {/each}
+  </article>
+{/each}
+
+<form onsubmit={(event) => { event.preventDefault(); send(); }}>
+  <input bind:value={input} />
+  <button disabled={!input.trim() || chat.isStreaming}>Send</button>
+</form>
+```
 
 ## Modules
 
-| Subpath               | Exports                                                                                       | Replaces                                                        |
-| --------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `agents-svelte`       | `Agent`, `createAgent`                                                                        | `useAgent` from `agents/react`                                  |
-| `agents-svelte/chat`  | `AgentChat`, `AgentChatToolCall`, `createAgentChat`, `getAgentMessages`                       | `useAgentChat` from `agents/ai-react`                           |
-| `agents-svelte/voice` | `VoiceAgent`, `VoiceInput`, `createVoiceAgent`, `createVoiceInput`, `WebSocketVoiceTransport` | `useVoiceAgent`, `useVoiceInput` from `@cloudflare/voice/react` |
+| Subpath               | Main exports                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| `agents-svelte`       | `Agent`, `createAgent`                                                                        |
+| `agents-svelte/chat`  | `AgentChat`, `AgentChatToolCall`, `createAgentChat`, `getAgentMessages`                       |
+| `agents-svelte/voice` | `VoiceAgent`, `VoiceInput`, `createVoiceAgent`, `createVoiceInput`, `WebSocketVoiceTransport` |
 
-## Construction model
+## Lifecycle model
 
-Each module exports:
+Each module exports a factory and a class.
 
-- a **class** (`Agent`, `AgentChat`, `VoiceAgent`, `VoiceInput`)
-- a **factory** (`createAgent`, `createAgentChat`, `createVoiceAgent`, `createVoiceInput`)
-
-Use the factory in components:
+Use factories during component setup:
 
 ```ts
 const agent = createAgent({ agent: "ChatAgent" });
 ```
 
-Factories return real reactive controllers immediately, but they defer sockets, HTTP fetches, voice transports, and browser APIs until Svelte runs `onMount(...)`. They also register `onDestroy(() => instance.close())`, so they must be called during component init.
+Factories register Svelte lifecycle hooks. They defer sockets, HTTP requests, voice transports, and browser APIs until `onMount(...)`, then call `.close()` from `onDestroy(...)`.
 
-Use the class directly outside component init or when you want explicit lifetime control:
+Use classes directly only when you need explicit lifetime control, such as outside component setup or when rebuilding a controller after options change:
 
 ```ts
-const agent = new Agent({ agent: "ChatAgent" });
+import { Agent } from "agents-svelte";
+
+const agent = new Agent({ agent: "ChatAgent", host: "localhost:8787" });
 agent.connect();
+
 // later
 agent.close();
 ```
 
-Class constructors are inert. Direct class users must call `.connect()` before using operations that require a connection, and `.close()` when the controller is no longer needed.
+Class constructors are inert. Direct class users must call `.connect()` before operations that need a connection and `.close()` when done.
 
 ## `createAgent` / `Agent`
 
@@ -117,17 +146,16 @@ Methods:
 - `agent.connect()`
 - `agent.close()`
 
-### Notes
+Notes:
 
-- There is no top-level `agent.identified` field anymore. Use `agent.identity.identified`.
-- The primary readiness signal is `agent.identity.identified`, not a promise.
-- State and identity transitions are exposed as reactive fields (`lastStateUpdate`, `lastIdentityChange`) instead of constructor callbacks.
-- `agent.socket` is `PartySocket | null`: it is `null` before `.connect()` and after explicit `.close()`. Transient socket close events keep the socket reference so PartySocket can reconnect.
-- For raw socket events, check `agent.socket` after mount or after explicit `.connect()` and attach listeners to the returned `PartySocket`.
+- The primary readiness signal is `agent.identity.identified`.
+- State and identity transitions are reactive fields, not constructor callbacks.
+- `agent.socket` is `PartySocket | null`. It is `null` before `.connect()` and after explicit `.close()`.
+- Passing `agent: "ChatAgent"` is normalized to the route segment `chat-agent`.
 
 ## `createAgentChat` / `AgentChat`
 
-Wraps `@ai-sdk/svelte`'s `Chat` class with the Cloudflare Agents WebSocket transport, initial-message fetching, reactive tool-call handles, stream resumption, and cross-tab broadcast handling.
+`AgentChat` extends `@ai-sdk/svelte`'s `Chat` class and uses the Cloudflare Agents chat WebSocket protocol. It adds initial-message loading, server history sync, stream resumption, cross-tab broadcast handling, and Svelte-friendly pending tool-call handles.
 
 ```svelte
 <script lang="ts">
@@ -142,41 +170,19 @@ Wraps `@ai-sdk/svelte`'s `Chat` class with the Cloudflare Agents WebSocket trans
       if (toolCall.toolName !== "getLocation") continue;
 
       void toolCall.run(async () => {
-        const pos = await new Promise<GeolocationPosition>((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej)
+        const position = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject)
         );
+
         return {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
         };
       });
     }
   });
-
-  let input = $state("");
 </script>
-
-{#each chat.messages as message (message.id)}
-  <div class={message.role}>
-    {#each message.parts as part}
-      {#if part.type === "text"}{part.text}{/if}
-    {/each}
-  </div>
-{/each}
-
-<form
-  onsubmit={(e) => {
-    e.preventDefault();
-    chat.sendMessage({ text: input });
-    input = "";
-  }}
->
-  <input bind:value={input} />
-  <button disabled={chat.isStreaming}>Send</button>
-</form>
 ```
-
-`AgentChat` extends `@ai-sdk/svelte`'s `Chat`, so you read the normal chat API directly from the instance. When `AgentChat.connect()` receives an already-connected `Agent`, it leaves that Agent open on `chat.close()`. When the chat opens a direct `new Agent(...)` itself, the chat owns and closes that Agent connection.
 
 Reactive fields:
 
@@ -185,7 +191,7 @@ Reactive fields:
 - `chat.error`
 - `chat.initialized`
 - `chat.initialLoadError`
-- `chat.pendingToolCalls` — current `input-available` tool calls from the latest assistant message
+- `chat.pendingToolCalls`
 - `chat.isServerStreaming`
 - `chat.isStreaming`
 
@@ -199,9 +205,9 @@ Methods:
 - `chat.setMessages(next, { skipServerSync? })`
 - `chat.clearHistory()`
 - `chat.connect()`
-- `chat.close()` — disposes listeners/effects, stops active streams, closes an Agent connection that the chat opened, and makes retained tool-call handles no-op.
+- `chat.close()`
 
-Pending tool call handles (`chat.pendingToolCalls`) expose:
+Pending tool call handles expose:
 
 - `toolCall.toolCallId`
 - `toolCall.toolName`
@@ -210,24 +216,15 @@ Pending tool call handles (`chat.pendingToolCalls`) expose:
 - `toolCall.running`
 - `toolCall.handled`
 - `toolCall.lastError`
-- `toolCall.addOutput({ output })` for a successful result, or `toolCall.addOutput({ state: "output-error", errorText })` for an error. Calling `toolCall.addOutput()` is a successful `undefined` output.
+- `toolCall.addOutput({ output })`
+- `toolCall.addOutput({ state: "output-error", errorText })`
 - `toolCall.run(async (input, toolCall) => output)`
 
-`pendingToolCalls` is the current actionable queue from the latest assistant message. It is not a durable registry of every unresolved historical tool call. Keep manual or delayed UI flows tied to the `AgentChatToolCall` handle you received from `pendingToolCalls`.
+`pendingToolCalls` is the current actionable queue from the latest assistant message. It is not a durable registry of every unresolved historical tool call. Keep manual UI tied to the `AgentChatToolCall` handle you received.
 
 `toolCall.run(...)` is safe to call from `$effect(...)`: repeated effect runs and duplicate calls share the same in-flight execution. If the handler throws, the tool call sends an `output-error` result, records `lastError`, and is marked handled.
 
-To report a manual tool error, call:
-
-```ts
-toolCall.addOutput({ state: "output-error", errorText: "Permission denied" });
-```
-
-By default, `autoContinueAfterToolResult` is `true`: after tool results and approvals, the server continues the conversation and the client resumes that continuation. Set `autoContinueAfterToolResult: false` when you want client-side continuation instead. In that mode, `AgentChat` uses the AI SDK's `sendAutomaticallyWhen` option after `toolCall.addOutput(...)` and `chat.addToolApprovalResponse(...)`; return `true` to call `chat.sendMessage()` automatically, or return `false` and call `chat.sendMessage()` yourself.
-
-`sendAutomaticallyWhen` is still the AI SDK's normal end-of-stream continuation hook. The extra `AgentChat` behavior only covers the case where `autoContinueAfterToolResult: false` means no server continuation stream will arrive after the tool result. In multi-tool turns, make `sendAutomaticallyWhen` return `true` only when the current assistant message has every tool output needed to continue. Keep the predicate pure and idempotent because it may be evaluated as tool outputs arrive.
-
-For manual UI, pass the handle to the UI that will resolve it:
+For manual UI, keep the handle in local state:
 
 ```svelte
 <script lang="ts">
@@ -236,10 +233,7 @@ For manual UI, pass the handle to the UI that will resolve it:
   let picker = $state<AgentChatToolCall | null>(null);
 
   $effect(() => {
-    picker =
-      chat.pendingToolCalls.find(
-        (toolCall) => toolCall.toolName === "pickFile"
-      ) ?? null;
+    picker = chat.pendingToolCalls.find((toolCall) => toolCall.toolName === "pickFile") ?? null;
   });
 </script>
 
@@ -256,16 +250,10 @@ For AI SDK approval parts, resolve the approval with `chat.addToolApprovalRespon
 {#each chat.messages as message}
   {#each message.parts as part}
     {#if "approval" in part && part.approval && part.state === "approval-requested"}
-      <button
-        onclick={() =>
-          chat.addToolApprovalResponse({ id: part.approval.id, approved: true })}
-      >
+      <button onclick={() => chat.addToolApprovalResponse({ id: part.approval.id, approved: true })}>
         Approve
       </button>
-      <button
-        onclick={() =>
-          chat.addToolApprovalResponse({ id: part.approval.id, approved: false })}
-      >
+      <button onclick={() => chat.addToolApprovalResponse({ id: part.approval.id, approved: false })}>
         Deny
       </button>
     {/if}
@@ -273,19 +261,31 @@ For AI SDK approval parts, resolve the approval with `chat.addToolApprovalRespon
 {/each}
 ```
 
-Helpers exported from `agents-svelte/chat`:
+### Initial messages
 
-- `getAgentMessages(...)`
+By default, `AgentChat` loads `/get-messages` from the Agent route. Use these options to override that behavior:
+
+- `initialMessages` seeds the client before a fetch completes.
+- `getInitialMessages: null` disables the default fetch.
+- `getInitialMessages: async (...) => messages` supplies a custom loader.
+
+If the loader fails, `chat.initialLoadError` is set and `chat.initialized` still becomes `true`.
+
+### Tool continuation
+
+By default, `autoContinueAfterToolResult` is `true`: after tool results and approvals, the server continues the conversation and the client resumes that continuation.
+
+Set `autoContinueAfterToolResult: false` when you want client-side continuation instead. In that mode, `AgentChat` uses the AI SDK's `sendAutomaticallyWhen` option after `toolCall.addOutput(...)` and `chat.addToolApprovalResponse(...)`.
 
 ## `createVoiceAgent` / `VoiceAgent`
 
-Voice bindings are class-based too. `VoiceAgent` reads directly from `VoiceClient` via Svelte's `createSubscriber(...)`, so it stays reactive without duplicating the underlying client state. Both voice controllers use `WebSocketVoiceTransport` by default and accept a custom `transport` option when you need to supply one.
+`VoiceAgent` wraps `@cloudflare/voice` with Svelte reactive getters. It uses `WebSocketVoiceTransport` by default and accepts a custom `transport` when needed.
 
 ```svelte
 <script lang="ts">
   import { createVoiceAgent } from "agents-svelte/voice";
 
-  const voice = createVoiceAgent({ agent: "voice-agent" });
+  const voice = createVoiceAgent({ agent: "MyVoiceAgent" });
 </script>
 
 <p>status: {voice.status}</p>
@@ -318,13 +318,13 @@ Methods:
 
 ## `createVoiceInput` / `VoiceInput`
 
-`VoiceInput` is the dictation-focused wrapper. It exposes a single accumulated user transcript string and ignores assistant transcript text.
+`VoiceInput` is the dictation-focused voice wrapper. It exposes accumulated user transcript text and interim transcript text.
 
 ```svelte
 <script lang="ts">
   import { createVoiceInput } from "agents-svelte/voice";
 
-  const input = createVoiceInput({ agent: "voice-input-agent" });
+  const input = createVoiceInput({ agent: "VoiceInputAgent" });
 </script>
 
 <textarea readonly value={input.transcript + (input.interimTranscript ? " " + input.interimTranscript : "")} />
@@ -353,11 +353,9 @@ Methods:
 
 ## SvelteKit usage
 
-`Agent`, `AgentChat`, `VoiceAgent`, and `VoiceInput` are component-scoped client controllers with SSR-safe constructors. You can create them during SvelteKit component setup; factories will not open sockets, fetch chat history, start voice transports, or touch browser-only APIs until `onMount(...)`.
+Controllers are browser-session objects. You can create them during SvelteKit component setup because factories do not open sockets, fetch history, start voice transports, or touch browser-only APIs until mount.
 
 Do not create long-lived controllers in `+page.server.ts`, `+layout.server.ts`, or shared module scope. Server load functions should return serializable data, and components should create the controller for the browser session.
-
-You can load initial chat history with SvelteKit `load` and pass it into the client controller:
 
 ```svelte
 <script lang="ts">
@@ -375,8 +373,6 @@ You can load initial chat history with SvelteKit `load` and pass it into the cli
 </script>
 ```
 
-Tool handlers that use browser APIs such as geolocation, camera, files, or clipboard belong in component `$effect(...)` blocks or user event handlers.
-
 If you use classes directly in SvelteKit components, connect them from browser-only lifecycle code:
 
 ```svelte
@@ -391,17 +387,38 @@ If you use classes directly in SvelteKit components, connect them from browser-o
 </script>
 ```
 
-`agent.getHttpUrl()` and explicit `.connect()` still need a host when called outside the browser. Pass `host` if you intentionally call them from non-browser code.
+`agent.getHttpUrl()` and explicit `.connect()` still need a host when called outside the browser. Pass `host` if you call them from non-browser code.
 
-## What's intentionally different from the React versions
+## Examples
 
-- **No Suspense / `use()` semantics for initial messages.** `AgentChat` exposes reactive `initialized` / `initialLoadError` state instead.
-- **No automatic socket reconnect on option change.** Recreate the controller when connection options change.
-- **Chat IDs are connection-option based, not socket-URL based.** `AgentChat` builds its underlying AI SDK `Chat.id` from the Agent route so chat construction is SSR-safe before a socket exists.
-- **Deprecated chat options dropped.** `toolsRequiringConfirmation`, `experimental_automaticToolResolution`, deprecated client-side `tools`/`AITool` config, and `addToolResult` are not ported.
-- **No hook-shaped callback API for durable state or tool-call routing.** In Svelte you read reactive fields and observe them with `$effect(...)`.
-- **No chat-level tool-output mutation API.** Resolve tool calls through the `AgentChatToolCall` handle from `chat.pendingToolCalls`.
-- **`Chat.messages` is assigned, not `setMessages()`-d.** That's the `@ai-sdk/svelte` model. `AgentChat#setMessages(...)` is a wrapper that also syncs back to the server.
+The examples are part of this repository and use pnpm workspaces.
+
+```bash
+pnpm install
+pnpm --dir examples/basic-chat run dev
+```
+
+Available examples:
+
+- `examples/basic-chat` — minimal AI chat app
+- `examples/tool-calls` — browser-side tools with `chat.pendingToolCalls`
+- `examples/multi-ai-chat` — inbox Agent with chat sub-agents and shared memory
+- `examples/human-in-the-loop` — server tool approvals and browser-resolved tools
+- `examples/voice-input` — dictation-focused voice input
+- `examples/voice-agent` — conversational voice agent with optional WebRTC/SFU path
+- `examples/sveltekit-chat` — SvelteKit SSR app connected to an Agent Worker
+
+## Differences from the React packages
+
+This package aims for the same observable Cloudflare Agents behavior where it matters, but the API is Svelte-shaped.
+
+- No hooks. Use controllers with reactive fields.
+- No Suspense / `use()` initial-message flow. Read `chat.initialized` and `chat.initialLoadError`.
+- No automatic reconnect when options change. Recreate the controller when connection options change.
+- `AgentChat` chat IDs are route-based so construction is SSR-safe before a socket exists.
+- Deprecated React chat options are not ported.
+- Resolve client tools through `AgentChatToolCall` handles from `chat.pendingToolCalls`.
+- `Chat.messages` is assigned directly. `chat.setMessages(...)` is an extra wrapper that also syncs to the server.
 
 ## Implementation note
 

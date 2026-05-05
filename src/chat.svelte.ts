@@ -171,18 +171,18 @@ export async function getAgentMessages<M extends UIMessage = UIMessage>(
     const base = options.host.replace(/\/$/, "");
     url = `${base}/agents/${slug}/${options.name}/get-messages`;
   }
-  try {
-    const r = await fetch(url, {
-      credentials: options.credentials,
-      headers: options.headers,
-    });
-    if (!r.ok) return [];
-    const text = await r.text();
-    if (!text.trim()) return [];
-    return JSON.parse(text) as M[];
-  } catch {
-    return [];
+  const r = await fetch(url, {
+    credentials: options.credentials,
+    headers: options.headers,
+  });
+  if (!r.ok) {
+    throw new Error(
+      `[agents-svelte/chat] Failed to load initial messages: ${r.status} ${r.statusText}`,
+    );
   }
+  const text = await r.text();
+  if (!text.trim()) return [];
+  return JSON.parse(text) as M[];
 }
 
 export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
@@ -447,6 +447,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   };
 
   setMessages(next: M[] | ((prev: M[]) => M[]), options?: { skipServerSync?: boolean }): void {
+    if (this.#closed) {
+      return;
+    }
+
     const resolved = typeof next === "function" ? next(this.messages) : next;
     const messages = this.#preserveProtectedStreamingAssistant(resolved);
     this.messages = messages;

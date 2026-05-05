@@ -1,55 +1,27 @@
 # SvelteKit chat
 
-A SvelteKit app that uses `createAgent(...)` and `createAgentChat(...)` from a server-rendered route.
+SvelteKit app that keeps SSR enabled while using `createAgent(...)` and `createAgentChat(...)` in a browser component.
 
-This example shows how to:
+## What it demonstrates
 
-- keep SvelteKit SSR enabled
-- create Agent controllers during component setup
-- let factories connect only after browser mount
-- pass server-loaded data into the chat component
-- connect a SvelteKit frontend to a Cloudflare Agent Worker
+- Creating Agent controllers during SvelteKit component setup
+- Letting factories connect only after browser mount
+- Passing server-loaded data into the chat component
+- Running the SvelteKit app and Agent Worker as separate Workers
+- Connecting the app to the Agent Worker by proxy or by `PUBLIC_AGENT_HOST`
 
 ## Why this example uses two Workers
 
 SvelteKit's Cloudflare adapter generates the Worker entrypoint at `.svelte-kit/cloudflare/_worker.js`. Cloudflare Agent classes must be exported from the Worker module that owns the Durable Object binding.
 
-To keep the setup explicit and portable, this example runs:
+To keep the setup explicit, this example runs:
 
 - a SvelteKit Worker for the app UI
-- a small Agent Worker in `src/agent-worker.ts` for `/agents/*`
+- an Agent Worker in `src/agent-worker.ts` for `/agents/*`
 
-The SvelteKit app reads `PUBLIC_AGENT_HOST` and passes it to `createAgent(...)`. If `PUBLIC_AGENT_HOST` is not set, the app uses the current request host, which is useful when you route `/agents/*` to the Agent Worker behind the same domain.
+The SvelteKit page reads `PUBLIC_AGENT_HOST` from runtime public env in `+page.server.ts` and passes it to `createAgent(...)`. If `PUBLIC_AGENT_HOST` is not set, the app uses the current request host. That works when `/agents/*` is routed or proxied to the Agent Worker on the same domain.
 
-## Run locally
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-The SvelteKit dev server proxies `/agents/*` to the Agent Worker via Vite's server proxy. Start both the Agent Worker and the SvelteKit app:
-
-In terminal 1, start the Agent Worker:
-
-```bash
-npm run worker
-```
-
-In terminal 2, start the SvelteKit app:
-
-```bash
-npm run dev
-```
-
-Open the local URL printed by Vite (it will proxy Agent traffic to the Agent Worker on port 8787).
-
-If you prefer to connect directly without the proxy, set `PUBLIC_AGENT_HOST`:
-
-```bash
-PUBLIC_AGENT_HOST=localhost:8787 npm run dev
-```
+## Cloudflare setup
 
 The Agent Worker uses a remote Workers AI binding:
 
@@ -57,17 +29,53 @@ The Agent Worker uses a remote Workers AI binding:
 "ai": { "binding": "AI", "remote": true }
 ```
 
-Local AI calls use your Wrangler Cloudflare session. If needed, run:
+Local AI calls use your Wrangler Cloudflare session. Log in before running the Agent Worker:
 
 ```bash
-npx wrangler login
+pnpm exec wrangler login
 ```
 
-## Build
+## Run locally
+
+Install dependencies:
 
 ```bash
-npm run check
-npm run build
+pnpm install
+```
+
+The Vite dev server proxies `/agents/*` to the Agent Worker on port 8787, so the default local setup does not need `PUBLIC_AGENT_HOST`.
+
+In terminal 1, start the Agent Worker:
+
+```bash
+pnpm run worker
+```
+
+In terminal 2, start the SvelteKit app:
+
+```bash
+pnpm run dev
+```
+
+Open the local URL printed by Vite.
+
+To bypass the Vite proxy and connect directly to the Agent Worker, run the SvelteKit app with:
+
+```bash
+PUBLIC_AGENT_HOST=localhost:8787 pnpm run dev
+```
+
+## Validate
+
+```bash
+pnpm run check
+pnpm run build
+```
+
+To validate the Agent Worker deploy shape without publishing it:
+
+```bash
+pnpm exec wrangler deploy --dry-run --config wrangler.agent.jsonc
 ```
 
 ## Deploy
@@ -75,17 +83,34 @@ npm run build
 Deploy the Agent Worker first:
 
 ```bash
-npx wrangler deploy --config wrangler.agent.jsonc
+pnpm exec wrangler deploy --config wrangler.agent.jsonc
 ```
 
-Then deploy the SvelteKit Worker with `PUBLIC_AGENT_HOST` set to the Agent Worker host:
+Then deploy the SvelteKit Worker.
+
+If `/agents/*` is routed to the Agent Worker on the same host as the SvelteKit app, you do not need `PUBLIC_AGENT_HOST`:
 
 ```bash
-PUBLIC_AGENT_HOST=agents-svelte-sveltekit-chat-agent.<subdomain>.workers.dev npm run build
-npx wrangler deploy
+pnpm run build
+pnpm exec wrangler deploy
 ```
 
-If you proxy `/agents/*` to the Agent Worker on the same domain, omit `PUBLIC_AGENT_HOST` and the client will use the current host.
+If the SvelteKit Worker should connect directly to the Agent Worker host, configure `PUBLIC_AGENT_HOST` as a runtime Worker variable for the SvelteKit Worker before deploying. For example, add a `vars` block to `wrangler.jsonc`:
+
+```jsonc
+"vars": {
+  "PUBLIC_AGENT_HOST": "agents-svelte-sveltekit-chat-agent.<subdomain>.workers.dev"
+}
+```
+
+Then deploy:
+
+```bash
+pnpm run build
+pnpm exec wrangler deploy
+```
+
+`PUBLIC_AGENT_HOST` can be a host name with an optional port. Protocol prefixes such as `https://` are accepted but not required.
 
 ## Model
 
@@ -95,4 +120,4 @@ This example uses Workers AI with:
 @cf/google/gemma-4-26b-a4b-it
 ```
 
-The model id is shown in the page header so you can see what the Worker is using.
+The model id is shown in the page header.

@@ -11,30 +11,44 @@ const agentsTestsDir = path.resolve(testsDir, "../../../agents/src/tests");
 const hasIntegrationWorker = fs.existsSync(path.join(agentsTestsDir, "worker.ts"));
 
 export default defineConfig({
-  plugins: [svelte()],
-  define: {
-    __TEST_WORKER_URL__: JSON.stringify(`http://localhost:${TEST_WORKER_PORT}`),
-  },
   test: {
-    name: "svelte",
-    browser: {
-      enabled: true,
-      instances: [
-        {
-          browser: "chromium",
-          headless: true,
+    projects: [
+      {
+        plugins: [svelte()],
+        define: {
+          __TEST_WORKER_URL__: JSON.stringify(`http://localhost:${TEST_WORKER_PORT}`),
         },
-      ],
-      provider: playwright(),
-    },
-    clearMocks: true,
-    globalSetup: hasIntegrationWorker ? [path.join(testsDir, "setup.ts")] : [],
-    include: ["src/tests/**/*.test.ts"],
-    fileParallelism: false,
-    exclude: hasIntegrationWorker
-      ? ["src/tests/ssr-factories.test.ts"]
-      : ["src/tests/createAgent.svelte.test.ts", "src/tests/ssr-factories.test.ts"],
-    testTimeout: 30000,
-    hookTimeout: 120000,
+        test: {
+          name: "browser",
+          browser: {
+            enabled: true,
+            instances: [
+              {
+                browser: "chromium",
+                headless: true,
+              },
+            ],
+            provider: playwright(),
+          },
+          clearMocks: true,
+          globalSetup: hasIntegrationWorker ? [path.join(testsDir, "setup.ts")] : [],
+          include: ["src/tests/**/*.test.ts"],
+          fileParallelism: false,
+          exclude: hasIntegrationWorker
+            ? ["src/tests/ssr-factories.test.ts"]
+            : ["src/tests/createAgent.svelte.test.ts", "src/tests/ssr-factories.test.ts"],
+          testTimeout: 30000,
+          hookTimeout: 120000,
+        },
+      },
+      {
+        plugins: [svelte()],
+        test: {
+          name: "ssr",
+          environment: "node",
+          include: ["src/tests/ssr-factories.test.ts"],
+        },
+      },
+    ],
   },
 });

@@ -1,28 +1,43 @@
-# Voice Input
+# Voice input
 
-Svelte version of Cloudflare's [`voice-input`](https://github.com/cloudflare/agents/tree/main/examples/voice-input) example.
+Svelte dictation app using `createVoiceInput(...)` from `agents-svelte/voice`.
 
-This example shows real-time voice-to-text dictation with `createVoiceInput` from `agents-svelte/voice`. Speech is streamed to a Cloudflare Agent, transcribed with Workers AI Nova 3 STT, and rendered as reactive Svelte state.
+Speech is streamed to a Cloudflare Agent, transcribed with Workers AI Nova 3 STT, and rendered as reactive Svelte state.
+
+## What it demonstrates
+
+- `createVoiceInput({ agent: "VoiceInputAgent" })`
+- Reactive `voice.transcript` and `voice.interimTranscript`
+- Listening, mute, audio-level, error, copy, and clear UI state
+- Server-side `withVoiceInput(Agent)` with `WorkersAINova3STT`
+
+## Cloudflare setup
+
+The Worker uses Workers AI for speech-to-text. Log in before running the dev server:
+
+```bash
+pnpm exec wrangler login
+```
 
 ## Run locally
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open the local Vite URL and click **Dictate**. The browser will ask for microphone permission.
 
-## What this demonstrates
+## Validate
 
-- `createVoiceInput({ agent: "VoiceInputAgent" })`
-- reactive `voice.transcript` and `voice.interimTranscript`
-- listening, mute, audio-level, error, copy, and clear UI state
-- server-side `withVoiceInput(Agent)` with `WorkersAINova3STT`
+```bash
+pnpm run check
+pnpm run build
+```
 
 ## Deploy
 
 ```bash
-npm run build
-npx wrangler deploy
+pnpm run build
+pnpm exec wrangler deploy
 ```

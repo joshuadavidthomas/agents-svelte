@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "svelte";
 import type { UIMessage } from "ai";
 import { MessageType } from "@cloudflare/ai-chat/types";
-import { AgentChat, type CreateAgentChatOptions } from "../chat.svelte.ts";
+import { AgentChat, getAgentMessages, type CreateAgentChatOptions } from "../chat.svelte.ts";
 import { createMockAgent, type MockAgent } from "./mock-agent.ts";
 import {
   dispatchStaleWeatherApprovalSync,
@@ -187,6 +187,49 @@ describe("createAgentChat — initial messages", () => {
     }
   });
 
+  it("surfaces default fetch errors via initialLoadError and still initializes", async () => {
+    const name = `default-fetch-error-${Date.now()}-${Math.random()}`;
+    const mock = createMockAgent({
+      name,
+      url: `ws://localhost:3000/agents/chat/${name}?_pk=test`,
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("nope", {
+        status: 500,
+        statusText: "Server Error",
+      }),
+    );
+
+    try {
+      const chat = makeChat(mock, { getInitialMessages: undefined });
+      await waitForChatInitialized(chat);
+
+      expect(chat.initialLoadError?.message).toBe(
+        "[agents-svelte/chat] Failed to load initial messages: 500 Server Error",
+      );
+      expect(chat.messages).toEqual([]);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("throws from getAgentMessages on failed HTTP responses", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("nope", {
+        status: 404,
+        statusText: "Not Found",
+      }),
+    );
+
+    try {
+      await expect(getAgentMessages({ url: "http://localhost/get-messages" })).rejects.toThrow(
+        "[agents-svelte/chat] Failed to load initial messages: 404 Not Found",
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("does not overwrite socket-pushed messages with slower initial messages", async () => {
     const mock = createMockAgent();
     let resolveMessages!: (messages: UIMessage[]) => void;
@@ -273,6 +316,21 @@ describe("createAgentChat — setMessages", () => {
     flushSync();
 
     expect(chat.messages.map((m) => m.id)).toEqual(["a", "b"]);
+  });
+
+  it("ignores setMessages after close", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, {
+      initialMessages: [{ id: "a", role: "user", parts: [{ type: "text", text: "a" }] }],
+    });
+    await waitForChatInitialized(chat);
+
+    chat.close();
+    chat.setMessages([{ id: "b", role: "user", parts: [{ type: "text", text: "b" }] }]);
+    flushSync();
+
+    expect(chat.messages.map((message) => message.id)).toEqual(["a"]);
+    expect(findSent(mock, MessageType.CF_AGENT_CHAT_MESSAGES)).toBeUndefined();
   });
 
   it("skips server sync when skipServerSync is true", async () => {

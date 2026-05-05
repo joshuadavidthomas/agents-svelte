@@ -1,21 +1,38 @@
-# Human in the Loop
+# Human in the loop
 
-Svelte version of Cloudflare Agents' human-in-the-loop guide.
+Svelte chat app demonstrating Cloudflare Agents tool approvals and browser-resolved tools.
 
-This example demonstrates three tool patterns with `AIChatAgent`:
+## What it demonstrates
 
-- `needsApproval`: server-side tools that pause for user approval
-- client-side tool execution: tools without `execute` are fulfilled in the browser
-- automatic server tools: tools with `execute` and no approval run immediately
+- Server-side tools that pause for user approval with `needsApproval`
+- Approval UI rendered from AI SDK tool parts
+- Resolving approvals with `chat.addToolApprovalResponse(...)`
+- Browser-side tool execution for tools without server `execute` functions
+- Automatic server tools that run immediately
+- Tool output and error rendering in Svelte
 
-## Run
+## Cloudflare setup
 
-```bash
-npm install
-npm run dev
+The Worker uses a remote Workers AI binding:
+
+```jsonc
+"ai": { "binding": "AI", "remote": true }
 ```
 
-The example uses a remote Workers AI binding in local development. Make sure Wrangler is authenticated and your account has Workers AI access.
+Local AI calls use your Wrangler Cloudflare session. Log in before running the dev server:
+
+```bash
+pnpm exec wrangler login
+```
+
+## Run locally
+
+```bash
+pnpm install
+pnpm run dev
+```
+
+Open the local URL printed by Vite.
 
 ## Try it
 
@@ -42,3 +59,17 @@ What's the local news in Portland?
 ```
 
 The server runs the local-news tool automatically.
+
+## Validate
+
+```bash
+pnpm run check
+pnpm run build
+```
+
+## Deploy
+
+```bash
+pnpm run build
+pnpm exec wrangler deploy
+```

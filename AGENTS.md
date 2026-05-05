@@ -125,26 +125,25 @@ Do not delete behaviorful code until the behavior is covered another way. Once b
 For standalone package checks, run from this repository root:
 
 ```bash
-npm run check
-npm test
-npm run pack:dry-run
+pnpm run check
+pnpm test
 ```
 
 For `examples/basic-chat`, run:
 
 ```bash
 cd examples/basic-chat
-npm run check
-npm run build
+pnpm run check
+pnpm run build
 ```
 
 For `examples/sveltekit-chat`, run:
 
 ```bash
 cd examples/sveltekit-chat
-npm run check
-npm run build
-npx wrangler deploy --dry-run --config wrangler.agent.jsonc
+pnpm run check
+pnpm run build
+pnpm exec wrangler deploy --dry-run --config wrangler.agent.jsonc
 ```
 
 Add equivalent validation notes as new examples are created.

@@ -1,18 +1,19 @@
 # Basic chat
 
-A minimal Svelte chat app using `createAgent(...)` and `createAgentChat(...)` with a Cloudflare `AIChatAgent` Worker.
+Minimal Svelte chat app using `createAgent(...)`, `createAgentChat(...)`, and a Cloudflare `AIChatAgent` Worker.
 
-This example shows how to:
+## What it demonstrates
 
-- connect to an agent
-- send messages
-- stream assistant responses
-- render `chat.messages`
-- use `chat.isStreaming` for UI state
-- stop an active response with `chat.stop()`
-- start over with `chat.clearHistory()`
+- Connecting a Svelte component to an Agent Worker
+- Sending messages with `chat.sendMessage(...)`
+- Streaming assistant responses
+- Rendering `chat.messages`
+- Using `chat.isStreaming` for button and input state
+- Stopping an active response with `chat.stop()`
+- Clearing local and server history with `chat.clearHistory()`
+- Showing a simple token/cost estimate for the current chat
 
-## Run
+## Cloudflare setup
 
 The Worker uses a remote Workers AI binding:
 
@@ -20,20 +21,39 @@ The Worker uses a remote Workers AI binding:
 "ai": { "binding": "AI", "remote": true }
 ```
 
-Local AI calls use your Wrangler Cloudflare session.
+Local AI calls use your Wrangler Cloudflare session. Log in before running the dev server:
 
 ```bash
-npx wrangler login
-npm install
-npm run dev
+pnpm exec wrangler login
+```
+
+To check the active account:
+
+```bash
+pnpm exec wrangler whoami
+```
+
+## Run locally
+
+```bash
+pnpm install
+pnpm run dev
 ```
 
 Open the local URL printed by Vite.
 
-To check the active Wrangler account:
+## Validate
 
 ```bash
-npx wrangler whoami
+pnpm run check
+pnpm run build
+```
+
+## Deploy
+
+```bash
+pnpm run build
+pnpm exec wrangler deploy
 ```
 
 ## Model
@@ -44,10 +64,4 @@ This example uses Workers AI with:
 @cf/google/gemma-4-26b-a4b-it
 ```
 
-The model id is shown in the app header so you can see what the Worker is using.
-
-## Usage estimate
-
-The header shows input tokens, output tokens, and estimated cost for the current chat. The estimate updates after each assistant turn and resets when you start a new chat.
-
-If provider-reported usage metadata is available, the example uses it. Otherwise it falls back to a simple text-based estimate.
+The model id is shown in the app header.
