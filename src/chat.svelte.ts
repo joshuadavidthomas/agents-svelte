@@ -1,7 +1,7 @@
 import { onDestroy, onMount } from "svelte";
 import { Chat } from "@ai-sdk/svelte";
 import { AgentChatTransport, type AgentChatTransportEvent } from "./chat-transport.ts";
-import { broadcastTransition, type BroadcastStreamState } from "agents/chat";
+import { broadcastTransition, type BroadcastStreamState, type ClientToolSchema } from "agents/chat";
 import { isToolUIPart, getToolName, type ChatInit, type UIMessage } from "ai";
 import { nanoid } from "nanoid";
 import type { Agent } from "./agent.svelte.ts";
@@ -144,6 +144,8 @@ export interface CreateAgentChatOptions<M extends UIMessage = UIMessage> extends
    * When false, call `sendMessage()` to continue.
    */
   autoContinueAfterToolResult?: boolean;
+  /** Client tool schemas sent with chat requests and tool results. */
+  clientTools?: readonly ClientToolSchema[] | (() => readonly ClientToolSchema[] | undefined);
   /** Set false to disable automatic stream resumption on connect. */
   resume?: boolean;
 }
@@ -226,6 +228,9 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   #clientContinuationPromise: Promise<void> | null = null;
   #clientContinuationRequested = false;
   #cleanupPendingToolCallsEffect: (() => void) | null = null;
+  #initialLoadStarted = false;
+  #attachedSocket: unknown = null;
+  #resumedSocket: unknown = null;
   readonly #streamState: { current: BroadcastStreamState } = {
     current: { status: "idle" } as BroadcastStreamState,
   };
@@ -239,6 +244,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       prepareSendMessagesRequest,
       autoContinueAfterToolResult = true,
       sendAutomaticallyWhen,
+      clientTools: _clientTools,
       ...chatInit
     } = options;
 
@@ -264,6 +270,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         if (bodyOption) {
           const resolved = typeof bodyOption === "function" ? await bodyOption() : bodyOption;
           extra = { ...resolved };
+        }
+        const clientTools = this.#resolveClientTools();
+        if (clientTools) {
+          extra.clientTools = clientTools;
         }
         if (prepareSendMessagesRequest) {
           const result = await prepareSendMessagesRequest({
@@ -341,64 +351,45 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       $effect(() => {
         this.#collapseHydratedReplayTextParts();
       });
+
+      $effect(() => {
+        const socket = this.#options.agent.socket;
+        const socketChanged = socket !== this.#attachedSocket;
+        this.#attachedSocket = socket;
+        this.#transport.syncConnection();
+        if (this.#connected && socket) {
+          if (!this.#initialLoadStarted) {
+            this.#startInitialLoad();
+          } else if (
+            socketChanged &&
+            socket !== this.#resumedSocket &&
+            this.#options.resume !== false
+          ) {
+            this.#resumedSocket = socket;
+            void this.resumeStream().catch(() => {});
+          }
+        }
+      });
     });
   }
 
   connect(): void {
     if (this.#closed || this.#connected) return;
 
-    const {
-      agent,
-      getInitialMessages,
-      initialMessages,
-      credentials,
-      headers,
-      resume = true,
-    } = this.#options;
-
+    const { agent, resume = true } = this.#options;
     const agentWasConnected = agent.socket !== null;
 
     try {
       this.#ownsAgentConnection = !agentWasConnected;
       agent.connect();
-      const agentUrl = new URL(agent.getHttpUrl());
-      agentUrl.searchParams.delete("_pk");
-      const agentUrlString = agentUrl.toString();
-
       this.#transport.start({
         onEvent: (event) => this.#handleTransportEvent(event),
         shouldAcceptBroadcastResume: () => resume && !this.#closed,
       });
       this.#connected = true;
-
-      const initialPromise: Promise<M[]> =
-        getInitialMessages === null
-          ? Promise.resolve(initialMessages ?? [])
-          : getInitialMessages
-            ? getInitialMessages({
-                agent: agent.identity.agent,
-                name: agent.identity.name,
-                url: agentUrlString,
-              })
-            : getAgentMessages<M>({
-                url: `${agentUrlString.replace(/\/$/, "")}/get-messages`,
-                credentials,
-                headers,
-              });
-
-      initialPromise
-        .then((msgs) => {
-          if (this.#closed) return;
-          if (msgs.length > 0 && this.messages.length === 0) this.messages = msgs;
-          this.initialLoadError = null;
-          this.initialized = true;
-          if (resume) void this.resumeStream().catch(() => {});
-        })
-        .catch((e) => {
-          if (this.#closed) return;
-          this.initialLoadError = e instanceof Error ? e : new Error(String(e));
-          this.initialized = true;
-        });
+      if (agent.socket) {
+        this.#startInitialLoad();
+      }
     } catch (error) {
       this.#connected = false;
       this.#transport.close();
@@ -408,6 +399,64 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       }
       throw error;
     }
+  }
+
+  #startInitialLoad(): void {
+    if (this.#initialLoadStarted || this.#closed) {
+      return;
+    }
+
+    this.#initialLoadStarted = true;
+    const {
+      agent,
+      getInitialMessages,
+      initialMessages,
+      credentials,
+      headers,
+      resume = true,
+    } = this.#options;
+
+    const agentUrl = new URL(agent.getHttpUrl());
+    agentUrl.searchParams.delete("_pk");
+    const agentUrlString = agentUrl.toString();
+    if (resume) {
+      this.#resumedSocket = agent.socket;
+    }
+
+    const messagesUrl = new URL(agentUrlString);
+    messagesUrl.pathname = `${messagesUrl.pathname.replace(/\/$/, "")}/get-messages`;
+
+    const initialPromise: Promise<M[]> =
+      getInitialMessages === null
+        ? Promise.resolve(initialMessages ?? [])
+        : getInitialMessages
+          ? getInitialMessages({
+              agent: agent.identity.agent,
+              name: agent.identity.name,
+              url: agentUrlString,
+            })
+          : getAgentMessages<M>({
+              url: messagesUrl.toString(),
+              credentials,
+              headers,
+            });
+
+    initialPromise
+      .then((msgs) => {
+        if (this.#closed) return;
+        if (msgs.length > 0 && this.messages.length === 0) this.messages = msgs;
+        this.initialLoadError = null;
+        this.initialized = true;
+        if (resume) {
+          this.#resumedSocket = agent.socket;
+          void this.resumeStream().catch(() => {});
+        }
+      })
+      .catch((e) => {
+        if (this.#closed) return;
+        this.initialLoadError = e instanceof Error ? e : new Error(String(e));
+        this.initialized = true;
+      });
   }
 
   override addToolApprovalResponse = (opts: { id: string; approved: boolean }): void => {
@@ -979,9 +1028,27 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       ...(state ? { state } : {}),
       ...(errorText !== undefined ? { errorText } : {}),
       autoContinue: shouldAutoContinue,
+      clientTools: this.#resolveClientTools(),
     });
     if (shouldAutoContinue) {
       this.#startToolContinuation();
+    }
+  }
+
+  #resolveClientTools(): ClientToolSchema[] | undefined {
+    const clientTools = this.#options.clientTools;
+    const resolved = typeof clientTools === "function" ? clientTools() : clientTools;
+    return resolved && resolved.length > 0 ? [...resolved] : undefined;
+  }
+
+  #emitDataChunk(chunkData: unknown): void {
+    if (typeof chunkData !== "object" || chunkData === null || !("type" in chunkData)) {
+      return;
+    }
+
+    const type = (chunkData as { type?: unknown }).type;
+    if (typeof type === "string" && type.startsWith("data-")) {
+      this.#options.onData?.(chunkData as Parameters<NonNullable<ChatInit<M>["onData"]>>[0]);
     }
   }
 
@@ -1060,6 +1127,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           this.#continuationStreamsSeeded.add(event.streamId);
         }
 
+        this.#emitDataChunk(event.chunkData);
         const result = broadcastTransition(this.#streamState.current, {
           type: "response",
           streamId: event.streamId,

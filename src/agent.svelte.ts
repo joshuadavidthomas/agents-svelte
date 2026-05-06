@@ -178,6 +178,7 @@ export class Agent<AgentT = unknown, State = unknown> {
   #queryRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #options: CreateAgentOptions;
   #httpUrl: string | null = null;
+  #currentQuery: QueryObject | undefined;
 
   constructor(options: CreateAgentOptions) {
     this.#options = options;
@@ -209,7 +210,12 @@ export class Agent<AgentT = unknown, State = unknown> {
     return this.#connection.socket;
   }
 
-  #resolveConnectionOptions(): { host: string; route: string; subPath?: string; httpUrl: string } {
+  #resolveConnectionOptions(query = this.#currentQuery): {
+    host: string;
+    route: string;
+    subPath?: string;
+    httpUrl: string;
+  } {
     const options = this.#options;
     const agentNamespace = this.path[0].agent;
     const roomName = this.path[0].name;
@@ -233,11 +239,20 @@ export class Agent<AgentT = unknown, State = unknown> {
     const route = options.basePath
       ? options.basePath
       : [prefix, agentNamespace, roomName, subPath].filter(Boolean).join("/");
+    const url = new URL(`${httpProtocol}://${normalizedHost}/${route}${path}`);
+    if (query) {
+      for (const [key, value] of Object.entries(query)) {
+        if (value !== null && value !== undefined) {
+          url.searchParams.set(key, value);
+        }
+      }
+    }
+
     return {
       host: normalizedHost,
       route,
       subPath,
-      httpUrl: `${httpProtocol}://${normalizedHost}/${route}${path}`,
+      httpUrl: url.toString(),
     };
   }
 
@@ -352,7 +367,8 @@ export class Agent<AgentT = unknown, State = unknown> {
     const agentNamespace = this.path[0].agent;
     const roomName = this.path[0].name;
     const prefix = options.prefix ?? "agents";
-    const { host, route, subPath, httpUrl } = this.#resolveConnectionOptions();
+    this.#currentQuery = query;
+    const { host, route, subPath, httpUrl } = this.#resolveConnectionOptions(query);
     this.#httpUrl = httpUrl;
     const baseSocketOpts = {
       host,

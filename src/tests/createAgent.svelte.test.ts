@@ -468,6 +468,20 @@ describe("createAgent", () => {
   });
 
   describe("query parameters", () => {
+    it("includes non-null query params in the HTTP URL", () => {
+      const agent = new Agent({
+        agent: "TestStateAgent",
+        name: "svelte-test-query-url",
+        host: "localhost:8787",
+        protocol: "ws",
+        query: { token: "abc", skip: null },
+      });
+
+      expect(agent.getHttpUrl()).toBe(
+        "http://localhost:8787/agents/test-state-agent/svelte-test-query-url?token=abc",
+      );
+    });
+
     it("should pass static query params", async () => {
       const { host, protocol } = getTestWorkerHost();
 

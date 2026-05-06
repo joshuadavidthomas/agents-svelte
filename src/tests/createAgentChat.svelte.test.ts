@@ -155,7 +155,7 @@ describe("createAgentChat — initial messages", () => {
     const name = `default-fetch-${Date.now()}-${Math.random()}`;
     const mock = createMockAgent({
       name,
-      url: `ws://localhost:3000/agents/chat/${name}?_pk=test`,
+      url: `ws://localhost:3000/agents/chat/${name}?_pk=test&token=abc`,
     });
     const messages: UIMessage[] = [
       {
@@ -178,7 +178,7 @@ describe("createAgentChat — initial messages", () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls[0]?.[0]).toBe(
-        `http://localhost:3000/agents/chat/${name}/get-messages`,
+        `http://localhost:3000/agents/chat/${name}/get-messages?token=abc`,
       );
       expect(chat.messages).toEqual(messages);
       expect(chat.initialLoadError).toBeNull();
@@ -410,6 +410,35 @@ describe("createAgentChat — clearHistory", () => {
     expect(chat.isStreaming).toBe(false);
   });
 
+  it("sends client tool schemas with chat requests", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, {
+      clientTools: () => [
+        {
+          name: "getLocation",
+          description: "Get the current location.",
+          parameters: { type: "object" },
+        },
+      ],
+    });
+    await waitForChatInitialized(chat);
+
+    void chat.sendMessage({ text: "hello" });
+
+    await vi.waitFor(() => {
+      const request = findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST);
+      expect(request).toBeDefined();
+      const body = JSON.parse(String((request?.init as { body?: string } | undefined)?.body));
+      expect(body.clientTools).toEqual([
+        {
+          name: "getLocation",
+          description: "Get the current location.",
+          parameters: { type: "object" },
+        },
+      ]);
+    });
+  });
+
   it("ignores late chunks from an active local stream after clearing", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock);
@@ -517,6 +546,7 @@ describe("createAgentChat — tool output wire protocol", () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
       initialMessages: [seedToolPart("call-1", "getWeather")],
+      clientTools: [{ name: "getWeather", parameters: { type: "object" } }],
     });
     await waitForChatInitialized(chat);
 
@@ -531,6 +561,7 @@ describe("createAgentChat — tool output wire protocol", () => {
       toolName: "getWeather",
       output: { temp: 72 },
       autoContinue: true,
+      clientTools: [{ name: "getWeather", parameters: { type: "object" } }],
     });
 
     const toolPart = chat.messages[0]?.parts[0] as {
@@ -1122,6 +1153,29 @@ describe("createAgentChat — server-initiated messages", () => {
     expect(chat.isServerStreaming).toBe(true);
     const ack = findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK);
     expect(ack).toMatchObject({ id: "stream-abc" });
+  });
+
+  it("calls onData for server-pushed data chunks", async () => {
+    const mock = createMockAgent();
+    const onData = vi.fn();
+    const chat = makeChat(mock, { resume: true, onData });
+    await waitForChatInitialized(chat);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    flushSync();
+    mock.sent.length = 0;
+    mock.sentMessages.length = 0;
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "data-stream" });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "data-stream",
+      body: '{"type":"data-progress","data":{"step":1}}',
+      done: false,
+    });
+    flushSync();
+
+    expect(onData).toHaveBeenCalledWith({ type: "data-progress", data: { step: 1 } });
   });
 
   it("ignores unsolicited stream resume when resume is disabled", async () => {

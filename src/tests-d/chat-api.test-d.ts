@@ -1,5 +1,10 @@
 import type { Agent } from "../agent.svelte.ts";
-import type { AgentChat, AgentChatToolCall, AgentToolEvents } from "../chat.ts";
+import type {
+  AgentChat,
+  AgentChatToolCall,
+  AgentToolEvents,
+  CreateAgentChatOptions,
+} from "../chat.ts";
 import { createAgentToolEvents } from "../chat.ts";
 
 declare const agent: Agent;
@@ -33,3 +38,9 @@ toolEvents.close();
 
 const createdToolEvents: AgentToolEvents = createAgentToolEvents({ agent });
 void createdToolEvents;
+
+const chatWithClientTools: CreateAgentChatOptions = {
+  agent,
+  clientTools: () => [{ name: "getLocation", parameters: { type: "object" } }],
+};
+void chatWithClientTools;

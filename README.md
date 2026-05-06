@@ -303,6 +303,27 @@ By default, `autoContinueAfterToolResult` is `true`: after tool results and appr
 
 Set `autoContinueAfterToolResult: false` when you want client-side continuation instead. In that mode, `AgentChat` uses the AI SDK's `sendAutomaticallyWhen` option after `toolCall.addOutput(...)` and `chat.addToolApprovalResponse(...)`.
 
+### Client tool schemas
+
+Use `clientTools` when the browser should advertise tool schemas to the Agent. Execution still happens through `chat.pendingToolCalls`.
+
+```svelte
+<script lang="ts">
+  const chat = createAgentChat({
+    agent,
+    clientTools: () => [
+      {
+        name: "getLocation",
+        description: "Get the user's current location.",
+        parameters: { type: "object", properties: {} }
+      }
+    ]
+  });
+</script>
+```
+
+The schemas are sent with chat requests and tool results so server code can use `createToolsFromClientSchemas(options.clientTools)`.
+
 ## `createAgentToolEvents` / `AgentToolEvents`
 
 `AgentToolEvents` listens for Cloudflare `agent-tool-event` frames on an `Agent` socket. Use it when a parent Agent runs sub-agents as tools and you want to render the child runs next to the parent chat tool call.

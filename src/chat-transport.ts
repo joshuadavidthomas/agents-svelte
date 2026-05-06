@@ -106,17 +106,25 @@ export class AgentChatTransport<
       return;
     }
 
-    const connection = this.#getConnection();
-    if (!connection) {
-      throw new Error(
-        "[agents-svelte/chat] AgentChatTransport requires a connection before start()",
-      );
-    }
     this.#onEvent = options.onEvent;
     this.#shouldAcceptBroadcastResume = options.shouldAcceptBroadcastResume;
     this.#started = true;
+    this.syncConnection();
+  }
+
+  syncConnection(): void {
+    if (!this.#started || this.#closed) {
+      return;
+    }
+
+    const connection = this.#getConnection();
+    if (connection === this.#startedConnection) {
+      return;
+    }
+
+    this.#startedConnection?.removeEventListener("message", this.#handleMessage);
     this.#startedConnection = connection;
-    connection.addEventListener("message", this.#handleMessage);
+    connection?.addEventListener("message", this.#handleMessage);
   }
 
   prepareToolContinuation(): void {
@@ -165,6 +173,7 @@ export class AgentChatTransport<
     state?: "output-available" | "output-error";
     errorText?: string;
     autoContinue: boolean;
+    clientTools?: unknown;
   }): void {
     this.#send({
       type: MessageType.CF_AGENT_TOOL_RESULT,
@@ -174,6 +183,7 @@ export class AgentChatTransport<
       ...(options.state ? { state: options.state } : {}),
       ...(options.errorText !== undefined ? { errorText: options.errorText } : {}),
       autoContinue: options.autoContinue,
+      ...(options.clientTools ? { clientTools: options.clientTools } : {}),
     });
   }
 

@@ -67,7 +67,7 @@
 
   const chat = createAgentChat({
     agent,
-    body: () => ({ clientTools: activeTools }),
+    clientTools: () => activeTools,
     autoContinueAfterToolResult: false,
     sendAutomaticallyWhen: ({ messages }) => latestAssistantToolCallsResolved(messages),
   });
