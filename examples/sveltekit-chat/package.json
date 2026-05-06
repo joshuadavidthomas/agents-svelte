@@ -1,5 +1,5 @@
 {
-  "name": "sveltekit-chat",
+  "name": "agents-svelte-sveltekit-chat-example",
   "private": true,
   "type": "module",
   "scripts": {

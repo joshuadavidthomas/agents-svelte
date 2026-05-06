@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import { createAgent } from "agents-svelte";
   import { createAgentChat } from "agents-svelte/chat";
+  import ExampleChrome from "../../_shared/ExampleChrome.svelte";
 
   const agent = createAgent({ agent: "ChatAgent", name: "basic-chat" });
   const chat = createAgentChat({ agent });
@@ -138,50 +139,28 @@
   <title>AI Chat · agents-svelte</title>
 </svelte:head>
 
-<div class="shell">
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="title-row">
-        <h1>AI Chat</h1>
-        <div class="badge">Svelte</div>
-      </div>
-
-      <div class="header-actions">
-        <div class:online={agent.connected} class="connection">
-          <span></span>
-          {agent.connected ? "Connected" : "Connecting"}
-        </div>
-        <button
-          class="ghost"
-          type="button"
-          disabled={chat.messages.length === 0 || chat.isStreaming}
-          onclick={startNewChat}
-        >
-          New
-        </button>
+<ExampleChrome
+  title="AI Chat"
+  connected={agent.connected}
+  connectionText={agent.connected ? "Connected" : "Connecting"}
+  actionLabel="New"
+  actionDisabled={chat.messages.length === 0 || chat.isStreaming}
+  onAction={startNewChat}
+>
+  {#snippet subbar()}
+    <div class="usage-group">
+      <code>{MODEL_ID}</code>
+      <div class="usage-meta" title="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens">
+        <span>{completedUsage.inputTokens.toLocaleString()} in</span>
+        <span>{completedUsage.outputTokens.toLocaleString()} out</span>
+        <strong>{formattedCost}</strong>
+        {#if completedUsage.estimated}<em>est.</em>{/if}
       </div>
     </div>
-  </header>
-
-  <div class="subbar">
-    <div class="subbar-inner">
-      <div class="usage-group">
-        <code>{MODEL_ID}</code>
-        <div
-          class="usage-meta"
-          title="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens"
-        >
-          <span>{completedUsage.inputTokens.toLocaleString()} in</span>
-          <span>{completedUsage.outputTokens.toLocaleString()} out</span>
-          <strong>{formattedCost}</strong>
-          {#if completedUsage.estimated}<em>est.</em>{/if}
-        </div>
-      </div>
-      <div class="route-meta">
-        <span>{chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle"}</span>
-      </div>
+    <div class="route-meta">
+      <span>{chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle"}</span>
     </div>
-  </div>
+  {/snippet}
 
   <main bind:this={scrollContainer} class="messages" aria-live="polite">
     <div class="messages-inner">
@@ -228,7 +207,7 @@
     </div>
   </main>
 
-  <footer class="composer-wrap">
+  {#snippet composer()}
     <form
       class="composer"
       onsubmit={(event) => {
@@ -256,125 +235,13 @@
         <button disabled={!agent.connected || !input.trim()}>Send</button>
       {/if}
     </form>
-  </footer>
-</div>
+  {/snippet}
+</ExampleChrome>
 
 <style>
-  :global(*) {
-    box-sizing: border-box;
-  }
-
-  :global(html),
-  :global(body),
-  :global(#app) {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-  }
-
-  :global(body) {
-    color: #111827;
-    background: #f8fafc;
-    font-family:
-      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", sans-serif;
-  }
-
-  .shell {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: #f8fafc;
-  }
-
-  .topbar {
-    flex: none;
-    border-bottom: 1px solid #e5e7eb;
-    background: #ffffff;
-  }
-
-  .topbar-inner,
-  .subbar-inner,
-  .messages-inner,
-  .composer {
-    width: min(100%, 768px);
-    margin: 0 auto;
-  }
-
-  .topbar-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem 1.25rem;
-  }
-
-  h1,
   h2,
   p {
     margin: 0;
-  }
-
-  h1 {
-    font-size: 1rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-
-  .title-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .badge {
-    border: 1px solid #e5e7eb;
-    border-radius: 999px;
-    padding: 0.2rem 0.5rem;
-    color: #4b5563;
-    background: #f9fafb;
-    font-size: 0.75rem;
-    font-weight: 650;
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .connection {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    color: #6b7280;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .connection span {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 999px;
-    background: #f59e0b;
-  }
-
-  .connection.online span {
-    background: #10b981;
-  }
-
-  .subbar {
-    flex: none;
-    border-bottom: 1px solid #e5e7eb;
-    background: #f9fafb;
-  }
-
-  .subbar-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.625rem 1.25rem;
   }
 
   .route-meta,
@@ -383,11 +250,6 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-  }
-
-  .subbar span {
-    color: #6b7280;
-    font-size: 0.75rem;
   }
 
   .usage-meta span + span::before,
@@ -443,7 +305,9 @@
   }
 
   .messages-inner {
+    width: min(100%, 768px);
     min-height: 100%;
+    margin: 0 auto;
     padding: 1.5rem 1.25rem;
   }
 
@@ -573,12 +437,6 @@
     background: #fef2f2;
   }
 
-  .composer-wrap {
-    flex: none;
-    border-top: 1px solid #e5e7eb;
-    background: #ffffff;
-  }
-
   .composer {
     display: flex;
     align-items: flex-end;
@@ -621,7 +479,6 @@
     cursor: pointer;
   }
 
-  button.ghost,
   button.secondary {
     border: 1px solid #e5e7eb;
     color: #111827;
@@ -646,22 +503,6 @@
   }
 
   @media (max-width: 640px) {
-    .topbar-inner {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
-    .header-actions,
-    .subbar-inner {
-      width: 100%;
-      justify-content: space-between;
-    }
-
-    .subbar-inner {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
     .bubble {
       max-width: 92%;
     }

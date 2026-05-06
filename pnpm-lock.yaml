@@ -70,6 +70,58 @@ importers:
         specifier: ^4.83.0
         version: 4.88.0(@cloudflare/workers-types@4.20260505.1)
 
+  examples/agents-as-tools:
+    dependencies:
+      '@ai-sdk/svelte':
+        specifier: ^4.0.0
+        version: 4.0.175(svelte@5.55.5)(zod@4.4.3)
+      '@cloudflare/ai-chat':
+        specifier: '>=0.6.2 <1.0.0'
+        version: 0.6.2(@ai-sdk/react@3.0.177(react@19.2.5)(zod@4.4.3))(agents@0.12.3)(ai@6.0.175(zod@4.4.3))(react@19.2.5)(zod@4.4.3)
+      agents:
+        specifier: '>=0.12.3 <1.0.0'
+        version: 0.12.3(@babel/core@7.29.0)(@babel/runtime@7.29.2)(@cloudflare/ai-chat@0.6.2)(@cloudflare/workers-types@4.20260505.1)(ai@6.0.175(zod@4.4.3))(react@19.2.5)(rolldown@1.0.0-rc.17)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.3))(zod@4.4.3)
+      agents-svelte:
+        specifier: workspace:*
+        version: link:../..
+      ai:
+        specifier: ^6.0.0
+        version: 6.0.175(zod@4.4.3)
+      partysocket:
+        specifier: ^1.0.0
+        version: 1.1.16(react@19.2.5)
+      svelte:
+        specifier: ^5.0.0
+        version: 5.55.5
+      workers-ai-provider:
+        specifier: ^3.1.12
+        version: 3.1.13(@ai-sdk/provider@3.0.10)(ai@6.0.175(zod@4.4.3))
+      zod:
+        specifier: ^4.2.0
+        version: 4.4.3
+    devDependencies:
+      '@cloudflare/vite-plugin':
+        specifier: ^1.33.2
+        version: 1.36.0(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.3))(workerd@1.20260504.1)(wrangler@4.88.0(@cloudflare/workers-types@4.20260505.1))
+      '@cloudflare/workers-types':
+        specifier: ^4.20260418.1
+        version: 4.20260505.1
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^7.0.0
+        version: 7.1.0(svelte@5.55.5)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.3))
+      svelte-check:
+        specifier: ^4.3.4
+        version: 4.4.8(picomatch@4.0.4)(svelte@5.55.5)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.8
+        version: 8.0.10(@types/node@25.6.0)(esbuild@0.27.3)
+      wrangler:
+        specifier: ^4.83.0
+        version: 4.88.0(@cloudflare/workers-types@4.20260505.1)
+
   examples/basic-chat:
     dependencies:
       '@ai-sdk/svelte':

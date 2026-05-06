@@ -2,6 +2,7 @@
   import { createAgent } from "agents-svelte";
   import { createAgentChat, type ClientToolSchema } from "agents-svelte/chat";
   import type { UIMessage } from "ai";
+  import ExampleChrome from "../../_shared/ExampleChrome.svelte";
 
   type ToolDefinition = ClientToolSchema & {
     label: string;
@@ -216,20 +217,14 @@
   <title>Dynamic Tools</title>
 </svelte:head>
 
-<div class="app">
-  <header class="header">
-    <div class="header-inner">
-      <div class="title-row">
-        <h1>Dynamic Tools</h1>
-        <span class="badge">Svelte</span>
-      </div>
-      <div class="header-actions">
-        <div class="status" class:connected={agent.connected}>{agent.connected ? "Connected" : "Connecting"}</div>
-        <button class="top-button" type="button" onclick={startNewChat}>Clear</button>
-      </div>
-    </div>
-  </header>
-
+<ExampleChrome
+  title="Dynamic Tools"
+  connected={agent.connected}
+  connectionText={agent.connected ? "Connected" : "Connecting"}
+  actionLabel="Clear"
+  onAction={startNewChat}
+  contentWidth="wide"
+>
   <main class="layout">
     <aside class="tools">
       <section class="info-card">
@@ -332,67 +327,12 @@
       </form>
     </section>
   </main>
-</div>
+</ExampleChrome>
 
 <style>
-  :global(body) {
-    margin: 0;
-    color: #111827;
-    background: #f3f4f6;
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  }
-
-  .app {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-  }
-
-  .header {
-    border-bottom: 1px solid #e5e7eb;
-    padding: 0.875rem 1.25rem;
-    background: #ffffff;
-  }
-
-  .header-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    max-width: 72rem;
-    margin: 0 auto;
-  }
-
-  .title-row,
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-
-  .header-actions {
-    justify-content: flex-end;
-  }
-
-  .badge {
-    border: 1px solid #e5e7eb;
-    border-radius: 999px;
-    padding: 0.125rem 0.5rem;
-    color: #6b7280;
-    background: #f9fafb;
-    font-size: 0.6875rem;
-    font-weight: 650;
-  }
-
-  h1,
   h2,
   p {
     margin: 0;
-  }
-
-  h1 {
-    font-size: 0.9375rem;
   }
 
   h3 {
@@ -406,16 +346,6 @@
     margin-top: 0.25rem;
     color: #6b7280;
     font-size: 0.75rem;
-  }
-
-  .status {
-    color: #92400e;
-    font-size: 0.8125rem;
-    font-weight: 650;
-  }
-
-  .status.connected {
-    color: #047857;
   }
 
   .sidebar-footer {
@@ -698,15 +628,6 @@
   textarea:disabled {
     cursor: not-allowed;
     opacity: 0.55;
-  }
-
-  .top-button {
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    color: #374151;
-    background: #ffffff;
-    font-size: 0.8125rem;
   }
 
   @keyframes blink {

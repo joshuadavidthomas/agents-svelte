@@ -1,5 +1,5 @@
 {
-  "name": "voice-agent",
+  "name": "agents-svelte-voice-agent-example",
   "private": true,
   "type": "module",
   "scripts": {

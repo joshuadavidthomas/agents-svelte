@@ -1,5 +1,5 @@
 {
-  "name": "agents-svelte-human-in-the-loop",
+  "name": "agents-svelte-human-in-the-loop-example",
   "private": true,
   "type": "module",
   "scripts": {

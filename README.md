@@ -473,6 +473,7 @@ Available examples:
 - `examples/basic-chat` — minimal AI chat app
 - `examples/tool-calls` — browser-side tools with `chat.pendingToolCalls`
 - `examples/multi-ai-chat` — inbox Agent with chat sub-agents and shared memory
+- `examples/agents-as-tools` — parent tool calls that stream helper Agent runs with `createAgentToolEvents`
 - `examples/human-in-the-loop` — server tool approvals and browser-resolved tools
 - `examples/voice-input` — dictation-focused voice input
 - `examples/voice-agent` — conversational voice agent with optional WebRTC/SFU path

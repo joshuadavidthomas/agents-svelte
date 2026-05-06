@@ -3,6 +3,8 @@
   import { getToolName, isToolUIPart, type UIMessage } from "ai";
   import { createAgent } from "agents-svelte";
   import { createAgentChat } from "agents-svelte/chat";
+  import ExampleChrome from "../../_shared/ExampleChrome.svelte";
+  import ExampleUsage from "../../_shared/ExampleUsage.svelte";
 
   const MODEL_ID = "@cf/moonshotai/kimi-k2.6";
   const MODEL_INPUT_COST_PER_MILLION = 0.5;
@@ -48,10 +50,6 @@
         : pendingApproval
           ? "Waiting for approval"
           : "Idle",
-  );
-
-  const formattedCost = $derived(
-    usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`,
   );
 
   $effect(() => {
@@ -203,44 +201,24 @@
   <title>Human in the Loop · agents-svelte</title>
 </svelte:head>
 
-<div class="shell">
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="title-row">
-        <h1>Human in the Loop</h1>
-        <div class="badge">Svelte</div>
-      </div>
-
-      <div class="header-actions">
-        <div class:online={agent.connected} class="connection">
-          <span></span>
-          {agent.connected ? "Connected" : "Connecting"}
-        </div>
-        <button class="ghost" type="button" disabled={chat.messages.length === 0 || chat.isStreaming} onclick={startNewChat}>
-          Clear
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <div class="subbar">
-    <div class="subbar-inner">
-      <div>
-        <h2>Human-in-the-loop tools</h2>
-        <p>Approve or reject sensitive tool calls before they run.</p>
-      </div>
-      <div class="usage-group">
-        <code>{MODEL_ID}</code>
-        <div class="usage-meta" title="Kimi K2.6 cost estimate at $0.50/M input and $3.00/M output tokens">
-          <span>{usage.inputTokens.toLocaleString()} in</span>
-          <span>{usage.outputTokens.toLocaleString()} out</span>
-          <strong>{formattedCost}</strong>
-          {#if usage.estimated}<em>est.</em>{/if}
-          <span>{status}</span>
-        </div>
-      </div>
-    </div>
-  </div>
+<ExampleChrome
+  title="Human in the Loop"
+  connected={agent.connected}
+  connectionText={agent.connected ? "Connected" : "Connecting"}
+  actionLabel="Clear"
+  actionDisabled={chat.messages.length === 0 || chat.isStreaming}
+  onAction={startNewChat}
+>
+  {#snippet subbar()}
+    <ExampleUsage
+      title="Human-in-the-loop tools"
+      description="Approve or reject sensitive tool calls before they run."
+      modelId={MODEL_ID}
+      {usage}
+      costTitle="Kimi K2.6 cost estimate at $0.50/M input and $3.00/M output tokens"
+      {status}
+    />
+  {/snippet}
 
   <main bind:this={scrollContainer} class="messages" aria-live="polite">
     <div class="messages-inner">
@@ -307,7 +285,7 @@
     </div>
   </main>
 
-  <footer class="composer-wrap">
+  {#snippet composer()}
     <form class="composer" onsubmit={(event) => { event.preventDefault(); send(); }}>
       <textarea
         bind:value={input}
@@ -325,37 +303,14 @@
 
       <button disabled={!agent.connected || !input.trim() || chat.isStreaming || pendingApproval} type="submit">Send</button>
     </form>
-  </footer>
-</div>
+  {/snippet}
+</ExampleChrome>
 
 <style>
-  :global(*) { box-sizing: border-box; }
-  :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; }
-  :global(body) { color: #111827; background: #f8fafc; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  .shell { display: flex; flex-direction: column; height: 100vh; background: #f8fafc; }
-  .topbar { flex: none; border-bottom: 1px solid #e5e7eb; background: #fff; }
-  .topbar-inner, .subbar-inner, .messages-inner, .composer { width: min(100%, 768px); margin: 0 auto; }
-  .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; }
-  h1, h2, p { margin: 0; }
-  h1 { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; }
-  h2 { margin-bottom: 0.25rem; font-size: 0.875rem; }
-  .title-row, .header-actions, .connection, .usage-meta, .button-row { display: flex; align-items: center; }
-  .title-row { gap: 0.75rem; }
-  .header-actions { gap: 0.75rem; }
-  .badge { border: 1px solid #e5e7eb; border-radius: 999px; padding: 0.2rem 0.5rem; color: #4b5563; background: #f9fafb; font-size: 0.75rem; font-weight: 650; }
-  .connection { gap: 0.45rem; color: #6b7280; font-size: 0.75rem; font-weight: 600; }
-  .connection span { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: #f59e0b; }
-  .connection.online span { background: #10b981; }
-  .subbar { flex: none; border-bottom: 1px solid #e5e7eb; background: #f9fafb; }
-  .subbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 1.25rem; }
-  .subbar p, .subbar span, .usage-meta { color: #6b7280; font-size: 0.75rem; }
-  .usage-group { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; }
-  .usage-group code { overflow: hidden; max-width: 18rem; color: #6b7280; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
-  .usage-meta { flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; white-space: nowrap; }
-  .usage-meta strong { color: #111827; font-size: 0.75rem; }
-  .usage-meta em { color: #9ca3af; font-style: normal; }
+  h2, p { margin: 0; }
+  .button-row { display: flex; align-items: center; }
   .messages { flex: 1; min-height: 0; overflow-y: auto; }
-  .messages-inner { min-height: 100%; padding: 1.5rem 1.25rem; }
+  .messages-inner { width: min(100%, 768px); min-height: 100%; margin: 0 auto; padding: 1.5rem 1.25rem; }
   .empty { display: grid; min-height: 50vh; place-content: center; justify-items: center; color: #6b7280; text-align: center; }
   .empty-icon { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 999px; color: #2563eb; background: #fff; box-shadow: 0 8px 24px rgb(15 23 42 / 6%); }
   .empty h2 { margin-bottom: 0.5rem; color: #111827; font-size: 1.25rem; }
@@ -383,12 +338,11 @@
   .button-row { gap: 0.5rem; }
   .cursor { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -0.15em; background: #2563eb; animation: blink 1s step-end infinite; }
   .error { width: min(85vw, 42rem); margin: 1rem auto 0; border: 1px solid #fecaca; border-radius: 0.75rem; padding: 0.75rem 1rem; color: #991b1b; background: #fef2f2; }
-  .composer-wrap { flex: none; border-top: 1px solid #e5e7eb; background: rgb(255 255 255 / 92%); backdrop-filter: blur(10px); }
   .composer { display: flex; align-items: flex-end; gap: 0.75rem; padding: 1rem 1.25rem; }
   textarea { flex: 1; min-height: 2.75rem; max-height: 10rem; resize: vertical; border: 1px solid #e5e7eb; border-radius: 0.875rem; padding: 0.75rem 0.875rem; color: #111827; background: #fff; box-shadow: 0 1px 2px rgb(15 23 42 / 4%); font: inherit; line-height: 1.4; outline: none; }
   textarea:focus { border-color: transparent; box-shadow: 0 0 0 2px #93c5fd, 0 1px 2px rgb(15 23 42 / 4%); }
   button { flex: none; border: 0; border-radius: 0.875rem; padding: 0.75rem 1rem; color: #fff; background: #111827; font: inherit; font-weight: 650; cursor: pointer; }
-  button.ghost, button.secondary { border: 1px solid #e5e7eb; color: #111827; background: #fff; }
+  button.secondary { border: 1px solid #e5e7eb; color: #111827; background: #fff; }
   button:disabled, textarea:disabled { cursor: not-allowed; opacity: 0.55; }
   @keyframes blink { 50% { opacity: 0; } }
   @keyframes pulse { 0%, 80%, 100% { opacity: 0.35; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-0.125rem); } }
