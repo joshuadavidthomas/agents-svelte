@@ -64,6 +64,28 @@ This example assumes your Svelte app and Agent Worker share the same host and `/
 </form>
 ```
 
+## Examples
+
+Clone the repository, install dependencies, and run an example:
+
+```bash
+pnpm install
+cd examples/basic-chat
+pnpm exec wrangler login
+pnpm run dev
+```
+
+Available examples:
+
+- `examples/agents-as-tools` — parent tool calls that stream helper Agent runs with `createAgentToolEvents`
+- `examples/basic-chat` — minimal AI chat app
+- `examples/human-in-the-loop` — server tool approvals and browser-resolved tools
+- `examples/multi-ai-chat` — inbox Agent with chat sub-agents and shared memory
+- `examples/sveltekit-chat` — SvelteKit SSR app connected to an Agent Worker
+- `examples/tool-calls` — browser-side tools with `chat.pendingToolCalls`
+- `examples/voice-agent` — conversational voice agent
+- `examples/voice-input` — dictation-focused voice input
+
 ## Usage
 
 ### Worker setup
@@ -331,28 +353,6 @@ Do not create long-lived controllers in `+page.server.ts`, `+layout.server.ts`, 
 ```
 
 Pass `host` when browser code connects to an Agent Worker on another host, or when non-browser code calls `agent.getHttpUrl()` or `.connect()`.
-
-## Examples
-
-Clone the repository, install dependencies, and run an example:
-
-```bash
-pnpm install
-cd examples/basic-chat
-pnpm exec wrangler login
-pnpm run dev
-```
-
-Available examples:
-
-- `examples/basic-chat` — minimal AI chat app
-- `examples/tool-calls` — browser-side tools with `chat.pendingToolCalls`
-- `examples/multi-ai-chat` — inbox Agent with chat sub-agents and shared memory
-- `examples/agents-as-tools` — parent tool calls that stream helper Agent runs with `createAgentToolEvents`
-- `examples/human-in-the-loop` — server tool approvals and browser-resolved tools
-- `examples/voice-input` — dictation-focused voice input
-- `examples/voice-agent` — conversational voice agent
-- `examples/sveltekit-chat` — SvelteKit SSR app connected to an Agent Worker
 
 ## License
 
