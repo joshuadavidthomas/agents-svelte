@@ -100,11 +100,13 @@ export class MyVoiceAgent extends VoiceAgent<Env> {
     const url = new URL(context.connection.uri ?? "http://localhost");
     const llm = url.searchParams.get("llm");
     const llmModel =
-      llm === "kimi"
-        ? "@cf/moonshotai/kimi-k2.6"
-        : llm === "gpt-oss-20b"
-          ? "@cf/openai/gpt-oss-20b"
-          : "@cf/zai-org/glm-4.7-flash";
+      url.searchParams.get("e2e") === "true"
+        ? "@cf/google/gemma-4-26b-a4b-it"
+        : llm === "kimi"
+          ? "@cf/moonshotai/kimi-k2.6"
+          : llm === "gpt-oss-20b"
+            ? "@cf/openai/gpt-oss-20b"
+            : "@cf/zai-org/glm-4.7-flash";
 
     const result = streamText({
       model: workersAi(llmModel as Parameters<typeof workersAi>[0], {

@@ -4,7 +4,7 @@ import { convertToModelMessages, stepCountIs, streamText, tool } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
 
-const MODEL_ID = "@cf/moonshotai/kimi-k2.6";
+const MODEL_ID = "@cf/google/gemma-4-26b-a4b-it";
 
 type Env = {
   AI: Ai;

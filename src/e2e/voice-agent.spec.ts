@@ -11,7 +11,7 @@ test("voice agent starts a WebSocket voice call with browser microphone capture"
   const sentFrames = collectSentProtocolFrames(page);
   const receivedFrames = collectReceivedProtocolFrames(page);
 
-  await page.goto("/");
+  await page.goto("/?e2e=true");
 
   await expect(page.getByRole("heading", { name: "Voice Agent" })).toBeVisible();
   await expect(page.getByText("Connected")).toBeVisible({ timeout: 45_000 });

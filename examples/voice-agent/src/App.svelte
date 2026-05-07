@@ -65,6 +65,7 @@
   let sfuAudioInput: SFUAudioInput | undefined;
   const sessionId = getSessionId();
   const sessionShortId = sessionId.slice(0, 8);
+  const e2eMode = new URLSearchParams(location.search).get("e2e") === "true";
 
   // This example uses an explicit controller because changing the model query
   // requires replacing the voice connection. Explicit controllers must be
@@ -83,7 +84,9 @@
     return new VoiceAgent({
       agent: "MyVoiceAgent",
       name: sessionId,
-      query: { model: sttModel, llm: llmModel },
+      query: e2eMode
+        ? { model: sttModel, llm: llmModel, e2e: "true" }
+        : { model: sttModel, llm: llmModel },
       audioInput: sfuAudioInput,
     });
   }
