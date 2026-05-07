@@ -39,11 +39,13 @@ This example assumes your Svelte app and Agent Worker share the same host and `/
   const chat = createAgentChat({ agent });
 
   let input = $state("");
+  let canSend = $derived(input.trim().length > 0 && !chat.isStreaming);
 
-  function send() {
-    const text = input.trim();
-    if (!text || chat.isStreaming) return;
-    chat.sendMessage({ text });
+  function handleSubmit(event: SubmitEvent) {
+    event.preventDefault();
+    if (!canSend) return;
+
+    chat.sendMessage({ text: input.trim() });
     input = "";
   }
 </script>
@@ -58,9 +60,13 @@ This example assumes your Svelte app and Agent Worker share the same host and `/
   </article>
 {/each}
 
-<form onsubmit={(event) => { event.preventDefault(); send(); }}>
-  <input bind:value={input} />
-  <button disabled={!input.trim() || chat.isStreaming}>Send</button>
+<form onsubmit={handleSubmit}>
+  <label>
+    Message
+    <input bind:value={input} />
+  </label>
+
+  <button type="submit" disabled={!canSend}>Send</button>
 </form>
 ```
 
@@ -353,6 +359,19 @@ Do not create long-lived controllers in `+page.server.ts`, `+layout.server.ts`, 
 ```
 
 Pass `host` when browser code connects to an Agent Worker on another host, or when non-browser code calls `agent.getHttpUrl()` or `.connect()`.
+
+## Development
+
+To work on the package locally:
+
+```bash
+pnpm install
+pnpm run typecheck
+pnpm test
+pnpm test:e2e
+```
+
+`pnpm run check` runs formatting, linting, and type checking.
 
 ## License
 
