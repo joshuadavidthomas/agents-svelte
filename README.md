@@ -7,19 +7,19 @@ Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/
 ## Installation
 
 ```bash
-pnpm add agents-svelte
+npm install agents-svelte
 ```
 
 For chat:
 
 ```bash
-pnpm add @ai-sdk/svelte @cloudflare/ai-chat
+npm install @ai-sdk/svelte @cloudflare/ai-chat
 ```
 
 For voice:
 
 ```bash
-pnpm add @cloudflare/voice
+npm install @cloudflare/voice
 ```
 
 Use this package from a Svelte 5 app built with Vite or another toolchain that supports `.svelte.ts` files.
@@ -66,7 +66,7 @@ This example assumes your Svelte app and Agent Worker share the same host and `/
 
 ## Examples
 
-Clone the repository, install dependencies, and run an example:
+Clone the repository, install dependencies, and run an example. This repository uses pnpm for local development:
 
 ```bash
 pnpm install
