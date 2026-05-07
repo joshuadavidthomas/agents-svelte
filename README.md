@@ -138,11 +138,24 @@ Add the AI binding, Durable Object binding, and migration to `wrangler.jsonc`:
   "main": "src/server.ts",
   "compatibility_date": "2026-04-25",
   "compatibility_flags": ["nodejs_compat"],
-  "ai": { "binding": "AI", "remote": true },
-  "durable_objects": {
-    "bindings": [{ "name": "ChatAgent", "class_name": "ChatAgent" }]
+  "ai": {
+    "binding": "AI", 
+    "remote": true
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatAgent"] }]
+  "durable_objects": {
+    "bindings": [
+      { 
+        "name": "ChatAgent",
+        "class_name": "ChatAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChatAgent"]
+    }
+  ]
 }
 ```
 
