@@ -4,6 +4,13 @@ Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/
 
 `agents-svelte` gives Svelte apps lifecycle-managed controllers for Agent state, typed RPC, AI chat, tool events, and voice. It is a community package, not an official Cloudflare package, and the API may change before `1.0`.
 
+> [!NOTE]
+> This is a slop-port of the official Cloudflare Agents React APIs from `agents/react`.
+>
+> I pointed AI at the upstream implementation, told it to port the behavior to idiomatic Svelte 5, then kept yelling “no, that smells like React” until the API felt more Svelte-shaped. It has unit, type, and browser E2E coverage, and the examples exercise the main flows, but I have not used it in a serious production app yet.
+>
+> Expect rough edges before `1.0`.
+
 ## Installation
 
 ```bash
@@ -107,26 +114,28 @@ import { convertToModelMessages, streamText } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 
 type Env = {
-  AI: Ai;
-  ChatAgent: DurableObjectNamespace<ChatAgent>;
+    AI: Ai;
+    ChatAgent: DurableObjectNamespace<ChatAgent>;
 };
 
 export class ChatAgent extends AIChatAgent<Env> {
-  async onChatMessage() {
-    const workersai = createWorkersAI({ binding: this.env.AI });
-    const result = streamText({
-      model: workersai("@cf/google/gemma-4-26b-a4b-it"),
-      messages: await convertToModelMessages(this.messages),
-    });
+    async onChatMessage() {
+        const workersai = createWorkersAI({ binding: this.env.AI });
+        const result = streamText({
+            model: workersai("@cf/google/gemma-4-26b-a4b-it"),
+            messages: await convertToModelMessages(this.messages),
+        });
 
-    return result.toUIMessageStreamResponse();
-  }
+        return result.toUIMessageStreamResponse();
+    }
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
-    return (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 });
-  },
+    async fetch(request: Request, env: Env) {
+        return (
+            (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 })
+        );
+    },
 } satisfies ExportedHandler<Env>;
 ```
 
@@ -134,28 +143,28 @@ Add the AI binding, Durable Object binding, and migration to `wrangler.jsonc`:
 
 ```jsonc
 {
-  "name": "chat-agent",
-  "main": "src/server.ts",
-  "compatibility_date": "2026-04-25",
-  "compatibility_flags": ["nodejs_compat"],
-  "ai": {
-    "binding": "AI", 
-    "remote": true
-  },
-  "durable_objects": {
-    "bindings": [
-      { 
-        "name": "ChatAgent",
-        "class_name": "ChatAgent"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["ChatAgent"]
-    }
-  ]
+    "name": "chat-agent",
+    "main": "src/server.ts",
+    "compatibility_date": "2026-04-25",
+    "compatibility_flags": ["nodejs_compat"],
+    "ai": {
+        "binding": "AI",
+        "remote": true,
+    },
+    "durable_objects": {
+        "bindings": [
+            {
+                "name": "ChatAgent",
+                "class_name": "ChatAgent",
+            },
+        ],
+    },
+    "migrations": [
+        {
+            "tag": "v1",
+            "new_sqlite_classes": ["ChatAgent"],
+        },
+    ],
 }
 ```
 

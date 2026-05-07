@@ -1,122 +1,105 @@
+<!-- aside:start -->
+
 # SvelteKit chat
 
-SvelteKit app that keeps SSR enabled while using `createAgent(...)` and `createAgentChat(...)` in a browser component.
+SvelteKit app that serves SSR pages and Cloudflare Agent routes from one Worker.
 
-## What it demonstrates
+This example shows how to create `createAgent(...)` and `createAgentChat(...)` controllers during component setup, keep SSR enabled, and mount the Agents protocol at `/agents/*` inside the SvelteKit app.
 
-- Creating Agent controllers during SvelteKit component setup
-- Letting factories connect only after browser mount
-- Passing server-loaded data into the chat component
-- Running the SvelteKit app and Agent Worker as separate Workers
-- Connecting the app to the Agent Worker by proxy or by `PUBLIC_AGENT_HOST`
+<!-- aside:end -->
 
-## Why this example uses two Workers
+## Quick start
 
-SvelteKit's Cloudflare adapter generates the Worker entrypoint at `.svelte-kit/cloudflare/_worker.js`. Cloudflare Agent classes must be exported from the Worker module that owns the Durable Object binding.
-
-To keep the setup explicit, this example runs:
-
-- a SvelteKit Worker for the app UI
-- an Agent Worker in `src/agent-worker.ts` for `/agents/*`
-
-The SvelteKit page reads `PUBLIC_AGENT_HOST` from runtime public env in `+page.server.ts` and passes it to `createAgent(...)`. If `PUBLIC_AGENT_HOST` is not set, the app uses the current request host. That works when `/agents/*` is routed or proxied to the Agent Worker on the same domain.
-
-## Cloudflare setup
-
-The Agent Worker uses a remote Workers AI binding:
-
-```jsonc
-"ai": { "binding": "AI", "remote": true }
-```
-
-Local AI calls use your Wrangler Cloudflare session. If you are already logged in, you can skip the login command below.
-
-## Run locally
-
-Clone this repository, then run from this example directory:
+Run from this example directory:
 
 ```bash
 pnpm install
 pnpm exec wrangler login
-```
-
-The Vite dev server proxies `/agents/*` to the Agent Worker on `127.0.0.1:8787`, so the default local setup does not need `PUBLIC_AGENT_HOST`.
-
-Start both the SvelteKit app and Agent Worker with one command:
-
-```bash
 pnpm run dev
 ```
 
-Open the local URL printed by Vite. The command starts both the SvelteKit app and the Agent Worker.
+Open the local URL printed by Wrangler. The app and `/agents/*` routes are served by the same local Worker.
 
-For debugging, you can still run the processes separately:
-
-```bash
-pnpm run dev:worker
-pnpm run dev:app
-```
-
-To bypass the Vite proxy and connect directly to the Agent Worker, run the SvelteKit app with:
-
-```bash
-PUBLIC_AGENT_HOST=127.0.0.1:8787 pnpm run dev
-```
-
-## Build
+Build and preview the Worker deploy without publishing:
 
 ```bash
 pnpm run build
+pnpm exec wrangler deploy --dry-run
 ```
 
-Preview the Agent Worker deploy without publishing:
-
-```bash
-pnpm exec wrangler deploy --dry-run --config wrangler.agent.jsonc
-```
-
-## Deploy
-
-Deploy the Agent Worker first:
-
-```bash
-pnpm exec wrangler deploy --config wrangler.agent.jsonc
-```
-
-Then deploy the SvelteKit Worker.
-
-Your deployed SvelteKit Worker must be able to reach the Agent Worker. Either route `/agents/*` to the Agent Worker on the same host, or configure `PUBLIC_AGENT_HOST`.
-
-If `/agents/*` is routed to the Agent Worker on the same host as the SvelteKit app, you do not need `PUBLIC_AGENT_HOST`:
+Deploy:
 
 ```bash
 pnpm run build
 pnpm exec wrangler deploy
 ```
 
-If the SvelteKit Worker should connect directly to the Agent Worker host, configure `PUBLIC_AGENT_HOST` as a runtime Worker variable for the SvelteKit Worker before deploying. For example, add a `vars` block to `wrangler.jsonc`:
+<!-- aside:start -->
+
+## How it works
+
+### Agent route
+
+The Agent implementation lives in `src/agent.ts`. The SvelteKit endpoint at `src/routes/agents/[...path]/+server.ts` forwards `/agents/*` requests to `routeAgentRequest(request, platform.env)`.
+
+The endpoint dynamically imports `agents` so SvelteKit's Node build does not try to load Cloudflare-only `cloudflare:*` modules:
+
+```ts
+const { routeAgentRequest } = await import("agents");
+```
+
+### Worker entrypoint
+
+Cloudflare Durable Object migrations require `ChatAgent` to be exported from the deployed Worker module. `worker.ts` handles that export, then delegates `fetch` to SvelteKit's generated Worker:
+
+```ts
+import { ChatAgent } from "./src/agent";
+import sveltekitWorker from "./.svelte-kit/cloudflare/_worker.js";
+
+export { ChatAgent };
+
+export default sveltekitWorker;
+```
+
+`svelte.config.js` points the official adapter at `wrangler.sveltekit.jsonc` so the adapter writes its generated Worker without overwriting `worker.ts`. `wrangler.jsonc` is the deploy/dev config.
+
+### Cloudflare bindings
+
+The Worker uses Workers AI and a Durable Object binding for `ChatAgent`:
 
 ```jsonc
-"vars": {
-  "PUBLIC_AGENT_HOST": "agents-svelte-sveltekit-chat-agent.<subdomain>.workers.dev"
-}
+"ai": { "binding": "AI", "remote": true },
+"durable_objects": {
+  "bindings": [{ "name": "ChatAgent", "class_name": "ChatAgent" }]
+},
+"migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatAgent"] }]
 ```
 
-Then deploy:
+Local AI calls use your Wrangler Cloudflare session.
 
-```bash
-pnpm run build
-pnpm exec wrangler deploy
+<!-- aside:end -->
+
+## Variants
+
+### Separate Workers
+
+You can deploy the SvelteKit app and Agent backend as separate Workers. This is useful when one Agent backend serves multiple frontends or when you want the Agent Worker to follow the official Cloudflare Agents examples exactly.
+
+For that shape, create a dedicated Agent Worker that exports `ChatAgent` and calls `routeAgentRequest(...)` from its `fetch` handler. The SvelteKit app can connect to that Worker by routing `/agents/*` to it, or by passing `host` to `createAgent(...)`.
+
+### Community adapter
+
+[`@joshthomas/sveltekit-adapter-cloudflare`](https://github.com/joshuadavidthomas/sveltekit-adapter-cloudflare) lets a SvelteKit app provide Cloudflare platform exports from `src/platform.cloudflare.ts`.
+
+With that adapter, you can replace `worker.ts` and `wrangler.sveltekit.jsonc` with:
+
+```ts
+// src/platform.cloudflare.ts
+export { ChatAgent } from "./agent";
 ```
 
-`PUBLIC_AGENT_HOST` can be a host name with an optional port. Protocol prefixes such as `https://` are accepted but not required.
+That keeps SvelteKit's generated `fetch` handler and removes the build-only Wrangler config.
 
 ## Model
 
-This example uses Workers AI with:
-
-```txt
-@cf/google/gemma-4-26b-a4b-it
-```
-
-The model id is shown in the page header.
+This example uses Workers AI with `@cf/google/gemma-4-26b-a4b-it`. The model id is shown in the page header.

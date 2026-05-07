@@ -1,9 +1,10 @@
-import { env } from "$env/dynamic/public";
+import readmeHtml from "../../README.md?aside-html";
+
 import type { PageServerLoad } from "./$types";
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async () => {
   return {
-    agentHost: env.PUBLIC_AGENT_HOST || url.host,
     threadId: crypto.randomUUID(),
+    readmeHtml,
   };
 };

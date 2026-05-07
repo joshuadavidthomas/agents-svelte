@@ -1,9 +1,8 @@
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
-import { routeAgentRequest } from "agents";
 import { convertToModelMessages, streamText } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 
-type Env = {
+export type Env = {
   AI: Ai;
   ChatAgent: DurableObjectNamespace<ChatAgent>;
 };
@@ -32,9 +31,3 @@ export class ChatAgent extends AIChatAgent<Env> {
     });
   }
 }
-
-export default {
-  async fetch(request: Request, env: Env) {
-    return (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 });
-  },
-} satisfies ExportedHandler<Env>;

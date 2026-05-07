@@ -1,11 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "agents-svelte-sveltekit-chat",
-  "main": ".svelte-kit/cloudflare/_worker.js",
+  "main": "worker.ts",
   "compatibility_date": "2026-04-25",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
     "directory": ".svelte-kit/cloudflare",
   },
+  "ai": { "binding": "AI", "remote": true },
+  "durable_objects": {
+    "bindings": [{ "name": "ChatAgent", "class_name": "ChatAgent" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatAgent"] }],
 }

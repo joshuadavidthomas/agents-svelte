@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "InterVariable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans--font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01", "ss03";
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  --font-geist: "Geist", "InterVariable", ui-sans-serif, sans-serif;
+  --font-geist-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+}
+
+@layer components {
+  .prose {
+    color: var(--color-zinc-700);
+    font-size: 0.9375rem;
+    line-height: 1.65;
+  }
+  .prose > :first-child {
+    margin-top: 0;
+  }
+  .prose > :last-child {
+    margin-bottom: 0;
+  }
+
+  .prose h1 {
+    margin: 0 0 1rem;
+    color: var(--color-zinc-900);
+    font-size: 1.875rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  @media (min-width: 640px) {
+    .prose h1 {
+      font-size: 2.25rem;
+    }
+  }
+  .prose h2 {
+    margin: 2.25rem 0 0.75rem;
+    color: var(--color-zinc-900);
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .prose h3 {
+    margin: 1.75rem 0 0.5rem;
+    color: var(--color-zinc-900);
+    font-family: var(--font-geist-mono);
+    font-size: 0.78125rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .prose p {
+    margin: 0 0 1rem;
+    text-wrap: pretty;
+  }
+  .prose a {
+    color: var(--color-zinc-900);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--color-zinc-950) 30%, transparent);
+    text-underline-offset: 2px;
+  }
+  .prose a:hover {
+    text-decoration-color: var(--color-zinc-900);
+  }
+  .prose ul,
+  .prose ol {
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
+  }
+  .prose li {
+    margin: 0.25rem 0;
+  }
+  .prose ul {
+    list-style: disc;
+  }
+  .prose ol {
+    list-style: decimal;
+  }
+  .prose code:not(pre code) {
+    border-radius: 0.25rem;
+    padding: 0.1em 0.35em;
+    background: var(--color-zinc-100);
+    color: var(--color-zinc-800);
+    font-family: var(--font-geist-mono);
+    font-size: 0.85em;
+  }
+  .prose pre {
+    margin: 1rem 0 1.25rem;
+    overflow-x: auto;
+    border-radius: 0.5rem;
+    padding: 0.875rem 1rem;
+    background: var(--color-zinc-50);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-zinc-950) 5%, transparent);
+    color: #24292e;
+    font-family: var(--font-geist-mono);
+    font-size: 0.78125rem;
+    line-height: 1.6;
+    tab-size: 2;
+  }
+  .prose pre code {
+    font-family: inherit;
+  }
+
+  .prose .token.comment,
+  .prose .token.prolog,
+  .prose .token.cdata {
+    color: #6a737d;
+    font-style: italic;
+  }
+  .prose .token.keyword,
+  .prose .token.builtin,
+  .prose .token.tag {
+    color: #d73a49;
+  }
+  .prose .token.string,
+  .prose .token.attr-value,
+  .prose .token.char {
+    color: #032f62;
+  }
+  .prose .token.function,
+  .prose .token.class-name,
+  .prose .token.maybe-class-name {
+    color: #6f42c1;
+  }
+  .prose .token.number,
+  .prose .token.boolean,
+  .prose .token.constant,
+  .prose .token.symbol,
+  .prose .token.attr-name,
+  .prose .token.property {
+    color: #005cc5;
+  }
+  .prose .token.regex,
+  .prose .token.important {
+    color: #e36209;
+  }
+  .prose .token.deleted {
+    color: #b31d28;
+    background: #ffeef0;
+  }
+  .prose .token.inserted {
+    color: #22863a;
+    background: #f0fff4;
+  }
+}
+
