@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "worker": "wrangler dev --config wrangler.agent.jsonc --port 8787",
+    "dev": "pnpm --filter . run --parallel \"/^dev:.*/\"",
+    "dev:app": "vite",
+    "dev:worker": "wrangler dev --config wrangler.agent.jsonc --ip 127.0.0.1 --port 8787",
+    "worker": "pnpm run dev:worker",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"

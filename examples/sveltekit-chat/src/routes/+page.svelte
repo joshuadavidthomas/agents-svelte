@@ -1,14 +1,12 @@
 <script lang="ts">
   import { createAgent } from "agents-svelte";
   import { createAgentChat } from "agents-svelte/chat";
+  import LiveStatus from "../../../_shared/LiveStatus.svelte";
+  import { calculateTokenUsage } from "../../../_shared/usage";
 
   type PageData = {
     agentHost: string;
     threadId: string;
-  };
-
-  type UsageMetadata = {
-    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
   };
 
   let { data }: { data: PageData } = $props();
@@ -16,7 +14,6 @@
   const MODEL_ID = "@cf/google/gemma-4-26b-a4b-it";
   const MODEL_INPUT_COST_PER_MILLION = 0.1;
   const MODEL_OUTPUT_COST_PER_MILLION = 0.3;
-  const emptyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0, estimated: true };
 
   // These controllers are intentionally tied to the initial server-loaded thread.
   // They are safe during SSR; the factories connect only after browser mount.
@@ -25,25 +22,18 @@
   const chat = createAgentChat({ agent });
 
   let input = $state("");
-  let completedUsage = $state({ ...emptyUsage });
-  let wasStreaming = $state(false);
   let scrollContainer = $state<HTMLElement | null>(null);
 
   const connectedText = $derived(agent.identity.identified ? "connected" : agent.connected ? "connecting" : "offline");
-  const formattedCost = $derived(completedUsage.cost === 0 ? "$0.000000" : `$${completedUsage.cost.toFixed(6)}`);
+  const usage = $derived(
+    calculateTokenUsage(chat.messages, {
+      inputCostPerMillion: MODEL_INPUT_COST_PER_MILLION,
+      outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
+    }),
+  );
+  const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
+  const status = $derived(chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle");
   const scrollTrigger = $derived(`${chat.messages.length}:${chat.isStreaming}`);
-
-  $effect(() => {
-    if (chat.isStreaming) {
-      wasStreaming = true;
-      return;
-    }
-
-    if (wasStreaming) {
-      completedUsage = calculateUsage();
-      wasStreaming = false;
-    }
-  });
 
   $effect(() => {
     if (!scrollTrigger) return;
@@ -59,40 +49,7 @@
 
   function clear() {
     chat.clearHistory();
-    completedUsage = { ...emptyUsage };
-    wasStreaming = false;
     input = "";
-  }
-
-  function calculateUsage() {
-    let reportedInputTokens = 0;
-    let reportedOutputTokens = 0;
-    let estimatedInputTokens = 0;
-    let estimatedOutputTokens = 0;
-
-    for (const message of chat.messages) {
-      const metadata = message.metadata as UsageMetadata | undefined;
-      reportedInputTokens += metadata?.usage?.inputTokens ?? 0;
-      reportedOutputTokens += metadata?.usage?.outputTokens ?? 0;
-      const text = message.parts.map((part) => partText(part)).join("\n");
-      const tokens = estimateTokens(text);
-      if (message.role === "user") estimatedInputTokens += tokens;
-      else if (message.role === "assistant") estimatedOutputTokens += tokens;
-    }
-
-    const hasReportedUsage = reportedInputTokens > 0 || reportedOutputTokens > 0;
-    const inputTokens = hasReportedUsage ? reportedInputTokens : estimatedInputTokens;
-    const outputTokens = hasReportedUsage ? reportedOutputTokens : estimatedOutputTokens;
-    const cost = (inputTokens / 1_000_000) * MODEL_INPUT_COST_PER_MILLION + (outputTokens / 1_000_000) * MODEL_OUTPUT_COST_PER_MILLION;
-    return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, cost, estimated: !hasReportedUsage };
-  }
-
-  function estimateTokens(text: string) {
-    return text.trim() ? Math.ceil(text.length / 4) : 0;
-  }
-
-  function partText(part: unknown): string {
-    return typeof part === "object" && part !== null && "text" in part ? String(part.text ?? "") : "";
   }
 </script>
 
@@ -130,7 +87,7 @@
     <header class="toolbar">
       <div>
         <h2>Messages</h2>
-        <p>{completedUsage.totalTokens} tokens{completedUsage.estimated ? " estimated" : " reported"} · {formattedCost}</p>
+        <p>{usage.totalTokens} tokens{usage.estimated ? " estimated" : " reported"} · {formattedCost}</p>
       </div>
       <div class="actions">
         {#if chat.isStreaming}
@@ -141,8 +98,10 @@
     </header>
 
     <div class="subbar">
-      <span>{chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle"}</span>
+      <span>{status}</span>
     </div>
+
+    <LiveStatus message={status} />
 
     <div class="transcript" bind:this={scrollContainer}>
       {#if chat.messages.length === 0}
@@ -173,7 +132,19 @@
     </div>
 
     <form class="composer" onsubmit={(event) => { event.preventDefault(); send(); }}>
-      <input bind:value={input} placeholder="Ask about Cloudflare Agents and SvelteKit" disabled={chat.isStreaming} />
+      <input
+        bind:value={input}
+        placeholder="Ask about Cloudflare Agents and SvelteKit"
+        aria-label="Message"
+        disabled={chat.isStreaming}
+        onkeydown={(event) => {
+          if (event.isComposing) return;
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            send();
+          }
+        }}
+      />
       <button disabled={!input.trim() || chat.isStreaming}>Send</button>
     </form>
   </section>

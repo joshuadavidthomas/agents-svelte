@@ -27,6 +27,12 @@ lib-cov
 coverage
 *.lcov
 
+# Playwright
+/test-results/
+/playwright-report/
+/src/e2e/test-results/
+/src/e2e/playwright-report/
+
 # nyc test coverage
 .nyc_output
 
@@ -78,6 +84,7 @@ web_modules/
 
 # dotenv environment variable files
 .env
+.dev.vars
 .env.development.local
 .env.test.local
 .env.production.local

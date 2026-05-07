@@ -4,18 +4,12 @@
   import { createAgentChat, createAgentToolEvents, type AgentToolRunState } from "agents-svelte/chat";
   import ExampleChrome from "../../_shared/ExampleChrome.svelte";
   import ExampleUsage from "../../_shared/ExampleUsage.svelte";
+  import LiveStatus from "../../_shared/LiveStatus.svelte";
+  import { calculateTokenUsage } from "../../_shared/usage";
 
   const agent = createAgent({ agent: "Assistant", name: "demo-user" });
   const chat = createAgentChat({ agent });
   const toolEvents = createAgentToolEvents({ agent });
-
-  type UsageMetadata = {
-    usage?: {
-      inputTokens?: number;
-      outputTokens?: number;
-      totalTokens?: number;
-    };
-  };
 
   const prompts = [
     "Compare Durable Objects and KV for chat history",
@@ -26,7 +20,6 @@
   const MODEL_ID = "@cf/google/gemma-4-26b-a4b-it";
   const MODEL_INPUT_COST_PER_MILLION = 0.1;
   const MODEL_OUTPUT_COST_PER_MILLION = 0.3;
-  const emptyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0, estimated: true };
 
   let input = $state(prompts[0]);
   let scrollContainer = $state<HTMLElement>();
@@ -37,26 +30,18 @@
   const runCount = $derived(helperRuns.length);
   const activeRunCount = $derived(helperRuns.filter((run) => run.status === "running").length);
 
-  let completedUsage = $state({ ...emptyUsage });
-  let wasStreaming = $state(false);
-
+  const usage = $derived(
+    calculateTokenUsage(chat.messages, {
+      inputCostPerMillion: MODEL_INPUT_COST_PER_MILLION,
+      outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
+    }),
+  );
   const status = $derived(chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle");
   const helperRunMeta = $derived([
     `${runCount} helper ${runCount === 1 ? "run" : "runs"}`,
     ...(activeRunCount > 0 ? [`${activeRunCount} active`] : []),
   ]);
 
-  $effect(() => {
-    if (chat.isStreaming) {
-      wasStreaming = true;
-      return;
-    }
-
-    if (wasStreaming) {
-      completedUsage = calculateUsage();
-      wasStreaming = false;
-    }
-  });
 
   $effect(() => {
     const next = new Set(openRunIds);
@@ -97,39 +82,8 @@
   function startNewChat() {
     chat.clearHistory();
     toolEvents.resetLocalState();
-    completedUsage = { ...emptyUsage };
-    wasStreaming = false;
     openRunIds = new Set();
     initializedRunIds.clear();
-  }
-
-  function calculateUsage() {
-    let reportedInputTokens = 0;
-    let reportedOutputTokens = 0;
-    let estimatedInputTokens = 0;
-    let estimatedOutputTokens = 0;
-
-    for (const message of chat.messages) {
-      const metadata = message.metadata as UsageMetadata | undefined;
-      reportedInputTokens += metadata?.usage?.inputTokens ?? 0;
-      reportedOutputTokens += metadata?.usage?.outputTokens ?? 0;
-
-      const estimatedTokens = estimateTokens(message.parts.map((part) => textFromPart(part) || reasoningFromPart(part)).join("\n"));
-      if (message.role === "user") estimatedInputTokens += estimatedTokens;
-      else if (message.role === "assistant") estimatedOutputTokens += estimatedTokens;
-    }
-
-    const hasReportedUsage = reportedInputTokens > 0 || reportedOutputTokens > 0;
-    const inputTokens = hasReportedUsage ? reportedInputTokens : estimatedInputTokens;
-    const outputTokens = hasReportedUsage ? reportedOutputTokens : estimatedOutputTokens;
-    const cost = (inputTokens / 1_000_000) * MODEL_INPUT_COST_PER_MILLION + (outputTokens / 1_000_000) * MODEL_OUTPUT_COST_PER_MILLION;
-
-    return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, cost, estimated: !hasReportedUsage };
-  }
-
-  function estimateTokens(text: string): number {
-    if (!text.trim()) return 0;
-    return Math.ceil(text.length / 4);
   }
 
   function toolName(part: unknown): string {
@@ -214,14 +168,16 @@
       title="Agents as tools"
       description="Helper Agents stream under their parent tool calls."
       modelId={MODEL_ID}
-      usage={completedUsage}
+      {usage}
       costTitle="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens"
       {status}
       extra={helperRunMeta}
     />
   {/snippet}
 
-  <main bind:this={scrollContainer} class="messages" aria-live="polite">
+  <LiveStatus message={status} />
+
+  <main bind:this={scrollContainer} class="messages">
     <div class="messages-inner">
       {#if chat.messages.length === 0}
         <section class="empty">
@@ -322,6 +278,7 @@
         placeholder="Ask the assistant to research, plan, or compare…"
         aria-label="Message"
         onkeydown={(event) => {
+          if (event.isComposing) return;
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             send();

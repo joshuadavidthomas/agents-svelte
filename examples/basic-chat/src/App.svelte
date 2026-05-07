@@ -3,6 +3,8 @@
   import { createAgent } from "agents-svelte";
   import { createAgentChat } from "agents-svelte/chat";
   import ExampleChrome from "../../_shared/ExampleChrome.svelte";
+  import LiveStatus from "../../_shared/LiveStatus.svelte";
+  import { calculateTokenUsage } from "../../_shared/usage";
 
   const agent = createAgent({ agent: "ChatAgent", name: "basic-chat" });
   const chat = createAgentChat({ agent });
@@ -22,86 +24,18 @@
   });
 
   type MessagePart = { type: string; text?: string };
-  type UsageMetadata = {
-    usage?: {
-      inputTokens?: number;
-      outputTokens?: number;
-      totalTokens?: number;
-    };
-  };
-
   const MODEL_ID = "@cf/google/gemma-4-26b-a4b-it";
   const MODEL_INPUT_COST_PER_MILLION = 0.1;
   const MODEL_OUTPUT_COST_PER_MILLION = 0.3;
-  const emptyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0, estimated: true };
 
-  let completedUsage = $state({ ...emptyUsage });
-  let wasStreaming = $state(false);
-
-  $effect(() => {
-    if (chat.isStreaming) {
-      wasStreaming = true;
-      return;
-    }
-
-    if (wasStreaming) {
-      completedUsage = calculateUsage();
-      wasStreaming = false;
-    }
-  });
-
-  const formattedCost = $derived(
-    completedUsage.cost === 0 ? "$0.000000" : `$${completedUsage.cost.toFixed(6)}`,
+  const usage = $derived(
+    calculateTokenUsage(chat.messages, {
+      inputCostPerMillion: MODEL_INPUT_COST_PER_MILLION,
+      outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
+    }),
   );
-
-  function calculateUsage() {
-    let reportedInputTokens = 0;
-    let reportedOutputTokens = 0;
-    let estimatedInputTokens = 0;
-    let estimatedOutputTokens = 0;
-
-    for (const message of chat.messages) {
-      const metadata = message.metadata as UsageMetadata | undefined;
-      reportedInputTokens += metadata?.usage?.inputTokens ?? 0;
-      reportedOutputTokens += metadata?.usage?.outputTokens ?? 0;
-
-      const estimatedTokens = estimateTokens(
-        message.parts
-          .map((part) => textFromPart(part) || reasoningFromPart(part))
-          .join("\n"),
-      );
-
-      if (message.role === "user") {
-        estimatedInputTokens += estimatedTokens;
-      } else if (message.role === "assistant") {
-        estimatedOutputTokens += estimatedTokens;
-      }
-    }
-
-    const hasReportedUsage = reportedInputTokens > 0 || reportedOutputTokens > 0;
-    const inputTokens = hasReportedUsage
-      ? reportedInputTokens
-      : estimatedInputTokens;
-    const outputTokens = hasReportedUsage
-      ? reportedOutputTokens
-      : estimatedOutputTokens;
-    const cost =
-      (inputTokens / 1_000_000) * MODEL_INPUT_COST_PER_MILLION +
-      (outputTokens / 1_000_000) * MODEL_OUTPUT_COST_PER_MILLION;
-
-    return {
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      cost,
-      estimated: !hasReportedUsage,
-    };
-  }
-
-  function estimateTokens(text: string): number {
-    if (!text.trim()) return 0;
-    return Math.ceil(text.length / 4);
-  }
+  const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
+  const status = $derived(chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle");
 
   function textFromPart(part: MessagePart): string {
     return part.type === "text" ? (part.text ?? "") : "";
@@ -129,8 +63,6 @@
 
   function startNewChat() {
     chat.clearHistory();
-    completedUsage = { ...emptyUsage };
-    wasStreaming = false;
     cancelledMessageIds = new Set();
   }
 </script>
@@ -151,18 +83,20 @@
     <div class="usage-group">
       <code>{MODEL_ID}</code>
       <div class="usage-meta" title="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens">
-        <span>{completedUsage.inputTokens.toLocaleString()} in</span>
-        <span>{completedUsage.outputTokens.toLocaleString()} out</span>
+        <span>{usage.inputTokens.toLocaleString()} in</span>
+        <span>{usage.outputTokens.toLocaleString()} out</span>
         <strong>{formattedCost}</strong>
-        {#if completedUsage.estimated}<em>est.</em>{/if}
+        {#if usage.estimated}<em>est.</em>{/if}
       </div>
     </div>
     <div class="route-meta">
-      <span>{chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle"}</span>
+      <span>{status}</span>
     </div>
   {/snippet}
 
-  <main bind:this={scrollContainer} class="messages" aria-live="polite">
+  <LiveStatus message={status} />
+
+  <main bind:this={scrollContainer} class="messages">
     <div class="messages-inner">
       {#if chat.messages.length === 0}
         <div class="empty">
@@ -222,6 +156,7 @@
         placeholder="Ask anything..."
         aria-label="Message"
         onkeydown={(event) => {
+          if (event.isComposing) return;
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             send();

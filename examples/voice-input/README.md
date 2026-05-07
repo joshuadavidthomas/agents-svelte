@@ -13,25 +13,32 @@ Speech is streamed to a Cloudflare Agent, transcribed with Workers AI Nova 3 STT
 
 ## Cloudflare setup
 
-The Worker uses Workers AI for speech-to-text. Log in before running the dev server:
-
-```bash
-pnpm exec wrangler login
-```
+The Worker uses Workers AI for speech-to-text. If you are already logged in, you can skip the login command below.
 
 ## Run locally
 
+Clone this repository, then run from this example directory:
+
 ```bash
 pnpm install
+pnpm exec wrangler login
 pnpm run dev
 ```
 
 Open the local Vite URL and click **Dictate**. The browser will ask for microphone permission.
 
-## Validate
+Localhost is allowed for microphone testing. For deployed apps, serve over HTTPS and test microphone permissions in your target browsers.
+
+## Try it
+
+- Click **Dictate** and allow microphone access.
+- Speak a sentence and watch final and interim transcript text update.
+- Toggle mute while listening.
+- Copy or clear the transcript.
+
+## Build
 
 ```bash
-pnpm run check
 pnpm run build
 ```
 

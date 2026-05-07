@@ -1,0 +1,6 @@
+# Optional: ElevenLabs TTS. Without this key, the agent uses Workers AI TTS.
+ELEVENLABS_API_KEY=
+
+# Optional ElevenLabs overrides.
+ELEVENLABS_VOICE_ID=
+ELEVENLABS_MODEL_ID=eleven_flash_v2_5

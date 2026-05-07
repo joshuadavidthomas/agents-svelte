@@ -19,25 +19,35 @@ The Worker uses a remote Workers AI binding:
 "ai": { "binding": "AI", "remote": true }
 ```
 
-Local AI calls use your Wrangler Cloudflare session. Log in before running the dev server:
-
-```bash
-pnpm exec wrangler login
-```
+Local AI calls use your Wrangler Cloudflare session. If you are already logged in, you can skip the login command below.
 
 ## Run locally
 
+Clone this repository, then run from this example directory:
+
 ```bash
 pnpm install
+pnpm exec wrangler login
 pnpm run dev
 ```
 
 Open the local URL printed by Vite.
 
-## Validate
+## Try it
+
+Ask for information the browser can provide:
+
+```txt
+What page am I on?
+What time is it?
+What is my screen size?
+```
+
+Disable a tool in the sidebar and ask for it again. The server sees only the active client tool schemas.
+
+## Build
 
 ```bash
-pnpm run check
 pnpm run build
 ```
 

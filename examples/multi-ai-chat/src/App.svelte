@@ -2,6 +2,8 @@
   import { onDestroy, onMount } from "svelte";
   import { Agent, createAgent } from "agents-svelte";
   import { AgentChat, AgentToolEvents, type AgentToolRunState } from "agents-svelte/chat";
+  import LiveStatus from "../../_shared/LiveStatus.svelte";
+  import { calculateTokenUsage } from "../../_shared/usage";
 
   type ChatSummary = {
     id: string;
@@ -21,37 +23,67 @@
     setSharedMemory(label: string, content: string): Promise<string>;
   };
 
-  type UsageMetadata = {
-    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
-  };
-
   const DEMO_USER = "demo-user";
   const MODEL_ID = "@cf/google/gemma-4-26b-a4b-it";
   const MODEL_INPUT_COST_PER_MILLION = 0.1;
   const MODEL_OUTPUT_COST_PER_MILLION = 0.3;
-  const emptyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0, estimated: true };
+
+  class ChatSession {
+    readonly agent: Agent;
+    readonly chat: AgentChat;
+    readonly toolEvents: AgentToolEvents;
+
+    constructor(chatId: string) {
+      this.agent = new Agent({ agent: "Inbox", name: DEMO_USER, sub: [{ agent: "Chat", name: chatId }] });
+      this.chat = new AgentChat({ agent: this.agent });
+      this.toolEvents = new AgentToolEvents({ agent: this.agent });
+    }
+
+    connect() {
+      this.chat.connect();
+    }
+
+    close() {
+      this.toolEvents.close();
+      this.chat.close();
+      this.agent.close();
+    }
+  }
 
   const inbox = createAgent<InboxMethods, InboxState>({ agent: "Inbox", name: DEMO_USER });
 
   let activeId = $state<string | null>(null);
+  let pendingActiveId = $state<string | null>(null);
   let input = $state("");
   let memory = $state("");
   let memoryDraft = $state("");
   let memorySaved = $state(false);
+  let memorySavedTimeout: ReturnType<typeof setTimeout> | undefined;
   let scrollContainer = $state<HTMLElement>();
-  let completedUsage = $state({ ...emptyUsage });
-  let wasStreaming = $state(false);
+  let activeSession = $state.raw<ChatSession | null>(null);
+  let editingChatId = $state<string | null>(null);
+  let editingTitle = $state("");
+  let deletingChatId = $state<string | null>(null);
 
   const chats = $derived(inbox.state?.chats ?? []);
   const activeChatSummary = $derived(chats.find((chat) => chat.id === activeId));
-  let chatAgent = $state<Agent | null>(null);
-  let chat = $state<AgentChat | null>(null);
-  let toolEvents = $state<AgentToolEvents | null>(null);
+  const chat = $derived(activeSession?.chat ?? null);
+  const toolEvents = $derived(activeSession?.toolEvents ?? null);
+  const usage = $derived(
+    calculateTokenUsage(chat?.messages, {
+      inputCostPerMillion: MODEL_INPUT_COST_PER_MILLION,
+      outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
+    }),
+  );
+  const status = $derived(chat?.status === "submitted" ? "Thinking" : chat?.isStreaming ? "Streaming" : "Idle");
+  const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
 
   $effect(() => {
+    const activeExists = activeId ? chats.some((chat) => chat.id === activeId) : false;
+    if (pendingActiveId && chats.some((chat) => chat.id === pendingActiveId)) pendingActiveId = null;
     if (!activeId && chats.length > 0) setActiveChat(chats[0].id);
-    if (activeId && chats.length > 0 && !chats.some((chat) => chat.id === activeId)) setActiveChat(chats[0].id);
-    if (activeId && chats.length === 0) setActiveChat(null);
+    if (activeId && chats.length > 0 && !activeExists && activeId !== pendingActiveId) setActiveChat(chats[0].id);
+    if (activeId && chats.length === 0 && activeId !== pendingActiveId) setActiveChat(null);
   });
 
   onMount(() => {
@@ -59,28 +91,16 @@
   });
 
   onDestroy(() => {
-    toolEvents?.close();
-    chat?.close();
-    chatAgent?.close();
+    if (memorySavedTimeout) clearTimeout(memorySavedTimeout);
+    activeSession?.close();
   });
 
   $effect(() => {
-    if (!chat) return;
-    if (chat.isStreaming) {
-      wasStreaming = true;
-      return;
-    }
-    if (wasStreaming) {
-      completedUsage = calculateUsage();
-      wasStreaming = false;
-    }
-  });
-
-  $effect(() => {
-    const events = toolEvents;
-    if (!events) return;
-    events.connect(chatAgent?.socket ?? null);
-    return () => events.close();
+    const session = activeSession;
+    const socket = session?.agent.socket;
+    if (!session) return;
+    session.toolEvents.connect(socket ?? null);
+    return () => session.toolEvents.close();
   });
 
   $effect(() => {
@@ -89,22 +109,43 @@
     requestAnimationFrame(() => scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight }));
   });
 
-  const formattedCost = $derived(completedUsage.cost === 0 ? "$0.000000" : `$${completedUsage.cost.toFixed(6)}`);
-
   async function createChat() {
     const id = await inbox.stub.createChat();
+    pendingActiveId = id;
     setActiveChat(id);
   }
 
-  async function renameChat(chat: ChatSummary) {
-    const title = prompt("Rename chat", chat.title);
-    if (title) await inbox.stub.renameChat(chat.id, title);
+  function startRename(summary: ChatSummary) {
+    editingChatId = summary.id;
+    editingTitle = summary.title;
+    deletingChatId = null;
   }
 
-  async function deleteChat(chat: ChatSummary) {
-    if (!confirm(`Delete ${chat.title}?`)) return;
-    await inbox.stub.deleteChat(chat.id);
-    if (activeId === chat.id) setActiveChat(null);
+  function cancelRename() {
+    editingChatId = null;
+    editingTitle = "";
+  }
+
+  async function saveRename(summary: ChatSummary) {
+    const title = editingTitle.trim();
+    if (!title) return;
+    await inbox.stub.renameChat(summary.id, title);
+    cancelRename();
+  }
+
+  function requestDelete(summary: ChatSummary) {
+    deletingChatId = summary.id;
+    editingChatId = null;
+  }
+
+  function cancelDelete() {
+    deletingChatId = null;
+  }
+
+  async function confirmDelete(summary: ChatSummary) {
+    await inbox.stub.deleteChat(summary.id);
+    deletingChatId = null;
+    if (activeId === summary.id) setActiveChat(null);
   }
 
   async function loadMemory() {
@@ -117,7 +158,11 @@
     memory = await inbox.stub.setSharedMemory("memory", memoryDraft);
     memoryDraft = memory;
     memorySaved = true;
-    setTimeout(() => (memorySaved = false), 1500);
+    if (memorySavedTimeout) clearTimeout(memorySavedTimeout);
+    memorySavedTimeout = setTimeout(() => {
+      memorySaved = false;
+      memorySavedTimeout = undefined;
+    }, 1500);
   }
 
   function send() {
@@ -130,60 +175,24 @@
   function setActiveChat(id: string | null) {
     if (id === activeId) return;
 
-    toolEvents?.close();
-    chat?.close();
-    chatAgent?.close();
+    activeSession?.close();
     activeId = id;
-    completedUsage = { ...emptyUsage };
-    wasStreaming = false;
+    if (!id) pendingActiveId = null;
+    editingChatId = null;
+    deletingChatId = null;
 
     if (!id) {
-      chat = null;
-      chatAgent = null;
-      toolEvents = null;
+      activeSession = null;
       return;
     }
 
-    const nextAgent = new Agent({ agent: "Inbox", name: DEMO_USER, sub: [{ agent: "Chat", name: id }] });
-    const nextChat = new AgentChat({ agent: nextAgent });
-    const nextToolEvents = new AgentToolEvents({ agent: nextAgent });
-    nextChat.connect();
-    nextToolEvents.connect();
-    chatAgent = nextAgent;
-    chat = nextChat;
-    toolEvents = nextToolEvents;
+    const nextSession = new ChatSession(id);
+    activeSession = nextSession;
+    nextSession.connect();
   }
 
   function selectChat(id: string) {
     setActiveChat(id);
-  }
-
-  function calculateUsage() {
-    if (!chat) return { ...emptyUsage };
-    let reportedInputTokens = 0;
-    let reportedOutputTokens = 0;
-    let estimatedInputTokens = 0;
-    let estimatedOutputTokens = 0;
-
-    for (const message of chat.messages) {
-      const metadata = message.metadata as UsageMetadata | undefined;
-      reportedInputTokens += metadata?.usage?.inputTokens ?? 0;
-      reportedOutputTokens += metadata?.usage?.outputTokens ?? 0;
-      const text = message.parts.map((part) => partText(part)).join("\n");
-      const tokens = estimateTokens(text);
-      if (message.role === "user") estimatedInputTokens += tokens;
-      else if (message.role === "assistant") estimatedOutputTokens += tokens;
-    }
-
-    const hasReportedUsage = reportedInputTokens > 0 || reportedOutputTokens > 0;
-    const inputTokens = hasReportedUsage ? reportedInputTokens : estimatedInputTokens;
-    const outputTokens = hasReportedUsage ? reportedOutputTokens : estimatedOutputTokens;
-    const cost = (inputTokens / 1_000_000) * MODEL_INPUT_COST_PER_MILLION + (outputTokens / 1_000_000) * MODEL_OUTPUT_COST_PER_MILLION;
-    return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, cost, estimated: !hasReportedUsage };
-  }
-
-  function estimateTokens(text: string) {
-    return text.trim() ? Math.ceil(text.length / 4) : 0;
   }
 
   function partText(part: unknown): string {
@@ -255,17 +264,43 @@
           {#if chats.length === 0}
             <p class="muted">No chats yet. Click New to start one.</p>
           {:else}
-            {#each chats as chat (chat.id)}
-              <button class:active={chat.id === activeId} class="chat-item" type="button" onclick={() => selectChat(chat.id)}>
+            {#each chats as summary (summary.id)}
+              <button
+                class:active={summary.id === activeId}
+                class="chat-item"
+                type="button"
+                aria-current={summary.id === activeId ? "page" : undefined}
+                onclick={() => selectChat(summary.id)}
+              >
                 <span>
-                  <strong>{chat.title}</strong>
-                  <small>{chat.lastMessagePreview || "No messages yet"}</small>
+                  <strong>{summary.title}</strong>
+                  <small>{summary.lastMessagePreview || "No messages yet"}</small>
                 </span>
               </button>
-              <div class="chat-actions">
-                <button type="button" onclick={() => renameChat(chat)}>Rename</button>
-                <button type="button" onclick={() => deleteChat(chat)}>Delete</button>
-              </div>
+              {#if editingChatId === summary.id}
+                <form
+                  class="inline-edit"
+                  onsubmit={(event) => {
+                    event.preventDefault();
+                    void saveRename(summary);
+                  }}
+                >
+                  <input bind:value={editingTitle} aria-label={`New title for ${summary.title}`} />
+                  <button type="submit" disabled={!editingTitle.trim()}>Save</button>
+                  <button type="button" onclick={cancelRename}>Cancel</button>
+                </form>
+              {:else if deletingChatId === summary.id}
+                <div class="inline-confirm" role="group" aria-label={`Delete ${summary.title}?`}>
+                  <span>Delete this chat?</span>
+                  <button type="button" onclick={() => confirmDelete(summary)}>Delete</button>
+                  <button type="button" onclick={cancelDelete}>Cancel</button>
+                </div>
+              {:else}
+                <div class="chat-actions">
+                  <button type="button" onclick={() => startRename(summary)}>Rename</button>
+                  <button type="button" onclick={() => requestDelete(summary)}>Delete</button>
+                </div>
+              {/if}
             {/each}
           {/if}
         </div>
@@ -273,7 +308,7 @@
 
       <section class="memory">
         <h3>Shared memory</h3>
-        <textarea bind:value={memoryDraft} placeholder="Facts to remember across chats…"></textarea>
+        <textarea bind:value={memoryDraft} placeholder="Facts to remember across chats…" aria-label="Shared memory"></textarea>
         <button type="button" onclick={saveMemory}>Save memory</button>
         {#if memorySaved}<span>Saved</span>{/if}
       </section>
@@ -281,12 +316,12 @@
       <footer class="sidebar-footer">
         <code>{MODEL_ID}</code>
         <div class="usage-meta" title="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens">
-          <span>{completedUsage.inputTokens.toLocaleString()} in</span>
-          <span>{completedUsage.outputTokens.toLocaleString()} out</span>
+          <span>{usage.inputTokens.toLocaleString()} in</span>
+          <span>{usage.outputTokens.toLocaleString()} out</span>
           <strong>{formattedCost}</strong>
-          {#if completedUsage.estimated}<em>est.</em>{/if}
+          {#if usage.estimated}<em>est.</em>{/if}
         </div>
-        <div class="usage-meta"><span>{chat?.status === "submitted" ? "Thinking" : chat?.isStreaming ? "Streaming" : "Idle"}</span></div>
+        <div class="usage-meta"><span>{status}</span></div>
       </footer>
     </aside>
 
@@ -295,6 +330,8 @@
         <div class="center-card">Create a chat to get started.</div>
       {:else}
         <div class="chat-header"><h2>{activeChatSummary?.title ?? "Chat"}</h2></div>
+        <LiveStatus message={status} />
+
         <div bind:this={scrollContainer} class="messages">
           {#if chat.messages.length === 0}
             <div class="empty">Send the first message to start this chat. Try: <em>“Remember I prefer concise answers”</em> or <em>“What time is it?”</em></div>
@@ -330,8 +367,20 @@
           {/each}
         </div>
         <form class="composer" onsubmit={(event) => { event.preventDefault(); send(); }}>
-          <textarea bind:value={input} placeholder="Type a message…" rows="1" onkeydown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }}></textarea>
-          <button disabled={!input || chat.isStreaming} type="submit">Send</button>
+          <textarea
+            bind:value={input}
+            placeholder="Type a message…"
+            rows="1"
+            aria-label="Message"
+            onkeydown={(event) => {
+              if (event.isComposing) return;
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                send();
+              }
+            }}
+          ></textarea>
+          <button disabled={!input.trim() || chat.isStreaming} type="submit">Send</button>
         </form>
       {/if}
     </section>
@@ -364,8 +413,11 @@
   .chat-item { display: block; width: 100%; text-align: left; border-color: #e5e7eb; }
   .chat-item.active { border-color: #111827; }
   .chat-item span { display: grid; gap: 0.25rem; }
-  .chat-actions { display: flex; gap: 0.375rem; margin-top: -0.375rem; }
-  .chat-actions button { padding: 0.25rem 0.5rem; color: #6b7280; font-size: 0.75rem; }
+  .chat-actions, .inline-edit, .inline-confirm { display: flex; gap: 0.375rem; margin-top: -0.375rem; }
+  .chat-actions button, .inline-edit button, .inline-confirm button { padding: 0.25rem 0.5rem; color: #6b7280; font-size: 0.75rem; }
+  .inline-edit { align-items: center; }
+  .inline-edit input { min-width: 0; flex: 1; border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 0.375rem 0.5rem; font: inherit; font-size: 0.75rem; }
+  .inline-confirm { align-items: center; flex-wrap: wrap; color: #92400e; font-size: 0.75rem; }
   .memory { display: grid; gap: 0.5rem; }
   .memory textarea { min-height: 6rem; resize: vertical; border: 1px solid #e5e7eb; border-radius: 0.75rem; padding: 0.75rem; font: inherit; }
   .sidebar-footer { display: grid; flex: 0 0 auto; gap: 0.375rem; border-top: 1px solid #e5e7eb; padding-top: 0.875rem; }

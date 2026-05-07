@@ -1,5 +1,4 @@
 import { onDestroy } from "svelte";
-import type PartySocket from "partysocket";
 import {
   applyAgentToolEvent,
   createAgentToolEventState,
@@ -10,7 +9,10 @@ import {
 } from "agents/chat";
 import type { Agent } from "./agent.svelte.ts";
 
-type AgentToolEventsSocket = Pick<PartySocket, "addEventListener" | "removeEventListener">;
+type AgentToolEventsSocket = {
+  addEventListener(type: "message", listener: (event: MessageEvent) => void): void;
+  removeEventListener(type: "message", listener: (event: MessageEvent) => void): void;
+};
 
 export interface CreateAgentToolEventsOptions {
   agent: Agent<unknown, unknown>;

@@ -19,16 +19,15 @@ The Worker uses a remote Workers AI binding:
 "ai": { "binding": "AI", "remote": true }
 ```
 
-Local AI calls use your Wrangler Cloudflare session. Log in before running the dev server:
-
-```bash
-pnpm exec wrangler login
-```
+Local AI calls use your Wrangler Cloudflare session. If you are already logged in, you can skip the login command below.
 
 ## Run locally
 
+Clone this repository, then run from this example directory:
+
 ```bash
 pnpm install
+pnpm exec wrangler login
 pnpm run dev
 ```
 
@@ -60,10 +59,11 @@ What's the local news in Portland?
 
 The server runs the local-news tool automatically.
 
-## Validate
+Weather and news responses are deterministic demo responses, not live external data.
+
+## Build
 
 ```bash
-pnpm run check
 pnpm run build
 ```
 
@@ -72,4 +72,12 @@ pnpm run build
 ```bash
 pnpm run build
 pnpm exec wrangler deploy
+```
+
+## Model
+
+This example uses Workers AI with:
+
+```txt
+@cf/moonshotai/kimi-k2.6
 ```

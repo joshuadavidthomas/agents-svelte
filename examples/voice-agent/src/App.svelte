@@ -4,20 +4,31 @@
     VoiceAgent,
     type VoiceStatus,
   } from "agents-svelte/voice";
+  import LiveStatus from "../../_shared/LiveStatus.svelte";
   import { SFUAudioInput, type VoiceTransportMode } from "./sfu-voice.svelte";
 
-  type SttModel = "flux" | "nova-3";
+  type SttModel = "nova-3" | "flux";
   type LlmModel = "glm" | "gpt-oss-20b" | "kimi";
 
   const SESSION_KEY = "agents-svelte-voice-agent-session-id";
 
   function getSessionId(): string {
-    let id = localStorage.getItem(SESSION_KEY);
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem(SESSION_KEY, id);
+    const fallback =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `voice-agent-${Math.random().toString(36).slice(2)}`;
+    if (typeof localStorage === "undefined") return fallback;
+
+    try {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = fallback;
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    } catch {
+      return fallback;
     }
-    return id;
   }
 
   function formatTime(timestamp?: number): string {
@@ -45,9 +56,10 @@
 
   let transport = $state<VoiceTransportMode>("websocket");
   let sfuEnabled = $state(false);
-  let sttModel = $state<SttModel>("flux");
+  let sttModel = $state<SttModel>("nova-3");
   let llmModel = $state<LlmModel>("glm");
   let textInput = $state("");
+  let composingTextInput = $state(false);
   let webrtcState = $state("new");
   let scrollContainer = $state<HTMLElement>();
   let sfuAudioInput: SFUAudioInput | undefined;
@@ -123,10 +135,19 @@
   });
 
   $effect(() => {
-    void voice.transcript.length;
-    void voice.interimTranscript;
+    const transcriptText = voice.transcript.map((message) => message.text).join("\n");
+    const interimTranscript = voice.interimTranscript ?? "";
     if (!scrollContainer) return;
-    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+
+    requestAnimationFrame(() => {
+      scrollContainer?.scrollIntoView({ block: "end" });
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
+    });
+
+    void transcriptText;
+    void interimTranscript;
   });
 
   onDestroy(() => {
@@ -194,7 +215,9 @@
     </div>
   </div>
 
-  <main class="messages" aria-live="polite">
+  <LiveStatus message={statusText} />
+
+  <main class="messages">
     <div class="messages-inner">
       <section class="controls-card" aria-label="Voice model controls">
         <div class="selector-row">
@@ -204,6 +227,7 @@
               class:active={transport === "websocket"}
               class="pill"
               type="button"
+              aria-pressed={transport === "websocket"}
               disabled={isInCall}
               onclick={() => setTransport("websocket")}
             >
@@ -213,6 +237,7 @@
               class:active={transport === "webrtc"}
               class="pill"
               type="button"
+              aria-pressed={transport === "webrtc"}
               disabled={isInCall || !canUseWebRTC}
               title={canUseWebRTC
                 ? "Use Cloudflare Realtime SFU"
@@ -225,25 +250,27 @@
         </div>
 
         <div class="selector-row">
-          <span>STT model</span>
+          <span>STT</span>
           <div class="selector-actions">
-            <button
-              class:active={sttModel === "flux"}
-              class="pill"
-              type="button"
-              disabled={isInCall}
-              onclick={() => setSttModel("flux")}
-            >
-              Flux
-            </button>
             <button
               class:active={sttModel === "nova-3"}
               class="pill"
               type="button"
+              aria-pressed={sttModel === "nova-3"}
               disabled={isInCall}
               onclick={() => setSttModel("nova-3")}
             >
               Nova 3
+            </button>
+            <button
+              class:active={sttModel === "flux"}
+              class="pill"
+              type="button"
+              aria-pressed={sttModel === "flux"}
+              disabled={isInCall}
+              onclick={() => setSttModel("flux")}
+            >
+              Flux
             </button>
           </div>
         </div>
@@ -255,6 +282,7 @@
               class:active={llmModel === "glm"}
               class="pill"
               type="button"
+              aria-pressed={llmModel === "glm"}
               disabled={isInCall}
               onclick={() => setLlmModel("glm")}
             >
@@ -264,6 +292,7 @@
               class:active={llmModel === "gpt-oss-20b"}
               class="pill"
               type="button"
+              aria-pressed={llmModel === "gpt-oss-20b"}
               disabled={isInCall}
               onclick={() => setLlmModel("gpt-oss-20b")}
             >
@@ -273,6 +302,7 @@
               class:active={llmModel === "kimi"}
               class="pill"
               type="button"
+              aria-pressed={llmModel === "kimi"}
               disabled={isInCall}
               onclick={() => setLlmModel("kimi")}
             >
@@ -326,7 +356,7 @@
               <div class="bubble">
                 <p>{message.text || "..."}</p>
                 {#if message.timestamp}
-                  <time>{formatTime(message.timestamp)}</time>
+                  <time datetime={new Date(message.timestamp).toISOString()}>{formatTime(message.timestamp)}</time>
                 {/if}
               </div>
             </article>
@@ -360,7 +390,7 @@
               : "Connecting..."}
           </button>
         {:else}
-          <button class="ghost" type="button" onclick={toggleMute}>
+          <button class="ghost" type="button" aria-pressed={voice.isMuted} onclick={toggleMute}>
             {voice.isMuted ? "Unmute" : "Mute"}
           </button>
           <button class="secondary" type="button" onclick={endCall}>
@@ -373,6 +403,7 @@
         class="text-composer"
         onsubmit={(event) => {
           event.preventDefault();
+          if (composingTextInput) return;
           send();
         }}
       >
@@ -381,6 +412,17 @@
           disabled={!voice.connected || isBusy}
           placeholder={voice.connected ? "Type a message..." : "Connecting..."}
           aria-label="Message"
+          oncompositionstart={() => {
+            composingTextInput = true;
+          }}
+          oncompositionend={() => {
+            composingTextInput = false;
+          }}
+          onkeydown={(event) => {
+            if (event.key === "Enter" && (event.isComposing || composingTextInput)) {
+              event.preventDefault();
+            }
+          }}
         />
         <button
           class="ghost"

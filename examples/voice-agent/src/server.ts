@@ -4,12 +4,15 @@ import {
   WorkersAIFluxSTT,
   WorkersAINova3STT,
   WorkersAITTS,
+  type StreamingTTSProvider,
   type Transcriber,
+  type TTSProvider,
   type VoiceTurnContext,
 } from "@cloudflare/voice";
 import { stepCountIs, streamText, tool } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 import { z } from "zod";
+import { ElevenLabsTTS } from "./elevenlabs-tts";
 import { handleSFURequest } from "./sfu";
 
 const VoiceAgent = withVoice(Agent);
@@ -28,20 +31,34 @@ type Env = {
   MyVoiceAgent: DurableObjectNamespace<MyVoiceAgent>;
   CLOUDFLARE_REALTIME_SFU_APP_ID?: string;
   CLOUDFLARE_REALTIME_SFU_API_TOKEN?: string;
+  ELEVENLABS_API_KEY?: string;
+  ELEVENLABS_VOICE_ID?: string;
+  ELEVENLABS_MODEL_ID?: string;
 };
 
+function createTTS(env: Env): TTSProvider & Partial<StreamingTTSProvider> {
+  if (env.ELEVENLABS_API_KEY) {
+    return new ElevenLabsTTS({
+      apiKey: env.ELEVENLABS_API_KEY,
+      voiceId: env.ELEVENLABS_VOICE_ID,
+      modelId: env.ELEVENLABS_MODEL_ID,
+    });
+  }
+  return new WorkersAITTS(env.AI);
+}
+
 export class MyVoiceAgent extends VoiceAgent<Env> {
-  tts = new WorkersAITTS(this.env.AI);
+  tts = createTTS(this.env);
 
   #activeSpeakerId: string | null = null;
 
   createTranscriber(connection: Connection): Transcriber {
     const url = new URL(connection.uri ?? "http://localhost");
     const model = url.searchParams.get("model");
-    if (model === "nova-3") {
-      return new WorkersAINova3STT(this.env.AI);
+    if (model === "flux") {
+      return new WorkersAIFluxSTT(this.env.AI);
     }
-    return new WorkersAIFluxSTT(this.env.AI);
+    return new WorkersAINova3STT(this.env.AI);
   }
 
   beforeCallStart(connection: Connection): boolean {

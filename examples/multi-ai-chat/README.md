@@ -29,25 +29,32 @@ The Worker uses a remote Workers AI binding:
 "ai": { "binding": "AI", "remote": true }
 ```
 
-Local AI calls use your Wrangler Cloudflare session. Log in before running the dev server:
-
-```bash
-pnpm exec wrangler login
-```
+Local AI calls use your Wrangler Cloudflare session. If you are already logged in, you can skip the login command below.
 
 ## Run locally
 
+Clone this repository, then run from this example directory:
+
 ```bash
 pnpm install
+pnpm exec wrangler login
 pnpm run dev
 ```
 
 Open the local URL printed by Vite.
 
-## Validate
+## Try it
+
+- Save shared memory, such as “I prefer concise answers.”
+- Create a second chat and ask what it remembers about you.
+- Rename and delete chats from the sidebar.
+- Ask for the current time to see tool progress render in the transcript.
+
+The demo uses a fixed `demo-user` identity. Replace that with your app's user identity before adapting this pattern.
+
+## Build
 
 ```bash
-pnpm run check
 pnpm run build
 ```
 

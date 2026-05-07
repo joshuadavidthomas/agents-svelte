@@ -5,6 +5,8 @@
   import { createAgentChat } from "agents-svelte/chat";
   import ExampleChrome from "../../_shared/ExampleChrome.svelte";
   import ExampleUsage from "../../_shared/ExampleUsage.svelte";
+  import LiveStatus from "../../_shared/LiveStatus.svelte";
+  import { calculateTokenUsage } from "../../_shared/usage";
 
   const MODEL_ID = "@cf/moonshotai/kimi-k2.6";
   const MODEL_INPUT_COST_PER_MILLION = 0.5;
@@ -18,15 +20,12 @@
 
   type MessagePart = UIMessage["parts"][number];
   type ToolPart = Extract<MessagePart, { toolCallId: string }>;
-  type UsageMetadata = {
-    usage?: {
-      inputTokens?: number;
-      outputTokens?: number;
-      totalTokens?: number;
-    };
-  };
-
-  const usage = $derived.by(calculateUsage);
+  const usage = $derived(
+    calculateTokenUsage(chat.messages, {
+      inputCostPerMillion: MODEL_INPUT_COST_PER_MILLION,
+      outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
+    }),
+  );
 
   const pendingApproval = $derived(
     chat.messages.some((message) =>
@@ -104,55 +103,6 @@
     chat.clearHistory();
   }
 
-  function calculateUsage() {
-    let reportedInputTokens = 0;
-    let reportedOutputTokens = 0;
-    let estimatedInputTokens = 0;
-    let estimatedOutputTokens = 0;
-
-    for (const message of chat.messages) {
-      const metadata = message.metadata as UsageMetadata | undefined;
-      reportedInputTokens += metadata?.usage?.inputTokens ?? 0;
-      reportedOutputTokens += metadata?.usage?.outputTokens ?? 0;
-
-      const estimatedTokens = estimateTokens(
-        message.parts
-          .map((part) => textFromPart(part) || reasoningFromPart(part))
-          .join("\n"),
-      );
-
-      if (message.role === "user") {
-        estimatedInputTokens += estimatedTokens;
-      } else if (message.role === "assistant") {
-        estimatedOutputTokens += estimatedTokens;
-      }
-    }
-
-    const hasReportedUsage = reportedInputTokens > 0 || reportedOutputTokens > 0;
-    const inputTokens = hasReportedUsage
-      ? reportedInputTokens
-      : estimatedInputTokens;
-    const outputTokens = hasReportedUsage
-      ? reportedOutputTokens
-      : estimatedOutputTokens;
-    const cost =
-      (inputTokens / 1_000_000) * MODEL_INPUT_COST_PER_MILLION +
-      (outputTokens / 1_000_000) * MODEL_OUTPUT_COST_PER_MILLION;
-
-    return {
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      cost,
-      estimated: !hasReportedUsage,
-    };
-  }
-
-  function estimateTokens(text: string): number {
-    if (!text.trim()) return 0;
-    return Math.ceil(text.length / 4);
-  }
-
   function textFromPart(part: MessagePart): string {
     return part.type === "text" ? (part.text ?? "") : "";
   }
@@ -220,7 +170,9 @@
     />
   {/snippet}
 
-  <main bind:this={scrollContainer} class="messages" aria-live="polite">
+  <LiveStatus message={status} />
+
+  <main bind:this={scrollContainer} class="messages">
     <div class="messages-inner">
       {#if chat.messages.length === 0}
         <div class="empty">
@@ -294,6 +246,7 @@
         placeholder={pendingApproval ? "Approve or reject the tool call to continue..." : "Say something..."}
         aria-label="Message"
         onkeydown={(event) => {
+          if (event.isComposing) return;
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             send();

@@ -3,45 +3,39 @@
   import { createAgentChat, type ClientToolSchema } from "agents-svelte/chat";
   import type { UIMessage } from "ai";
   import ExampleChrome from "../../_shared/ExampleChrome.svelte";
+  import LiveStatus from "../../_shared/LiveStatus.svelte";
+  import { calculateTokenUsage } from "../../_shared/usage";
 
   type ToolDefinition = ClientToolSchema & {
     label: string;
     execute: () => unknown | Promise<unknown>;
   };
 
-  type UsageMetadata = {
-    usage?: {
-      inputTokens?: number;
-      outputTokens?: number;
-      totalTokens?: number;
-    };
-  };
-
   const tools: ToolDefinition[] = [
     {
       name: "getPageTitle",
-      label: "getPageTitle",
+      label: "Page title",
       description: "Get the current browser page title.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
       execute: () => ({ title: document.title }),
     },
     {
       name: "getCurrentTime",
-      label: "getCurrentTime",
+      label: "Current time",
       description: "Get the user's current local time and time zone.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
       execute: () => ({ now: new Date().toLocaleString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     },
     {
       name: "getScreenInfo",
-      label: "getScreenInfo",
+      label: "Screen info",
       description: "Get the user's screen and viewport size.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
       execute: () => ({ screen: { width: screen.width, height: screen.height }, viewport: { width: innerWidth, height: innerHeight }, devicePixelRatio }),
     },
     {
       name: "getColorScheme",
-      label: "getColorScheme",
+      label: "Color scheme",
       description: "Detect whether the user prefers a light or dark color scheme.",
       parameters: { type: "object", properties: {}, additionalProperties: false },
       execute: () => ({ colorScheme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" }),
@@ -51,7 +45,6 @@
   const MODEL_ID = "@cf/google/gemma-4-26b-a4b-it";
   const MODEL_INPUT_COST_PER_MILLION = 0.1;
   const MODEL_OUTPUT_COST_PER_MILLION = 0.3;
-  const emptyUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0, estimated: true };
 
   const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
   const agent = createAgent({ agent: "DynamicToolsAgent", name: "tool-calls" });
@@ -72,24 +65,14 @@
     sendAutomaticallyWhen: ({ messages }) => latestAssistantToolCallsResolved(messages),
   });
 
-  let completedUsage = $state({ ...emptyUsage });
-  let wasStreaming = $state(false);
-
-  $effect(() => {
-    if (chat.isStreaming) {
-      wasStreaming = true;
-      return;
-    }
-
-    if (wasStreaming) {
-      completedUsage = calculateUsage();
-      wasStreaming = false;
-    }
-  });
-
-  const formattedCost = $derived(
-    completedUsage.cost === 0 ? "$0.000000" : `$${completedUsage.cost.toFixed(6)}`,
+  const usage = $derived(
+    calculateTokenUsage(chat.messages, {
+      inputCostPerMillion: MODEL_INPUT_COST_PER_MILLION,
+      outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
+    }),
   );
+  const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
+  const status = $derived(chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle");
 
   $effect(() => {
     for (const toolCall of chat.pendingToolCalls) {
@@ -127,50 +110,6 @@
 
   function startNewChat() {
     chat.clearHistory();
-    completedUsage = { ...emptyUsage };
-    wasStreaming = false;
-  }
-
-  function calculateUsage() {
-    let reportedInputTokens = 0;
-    let reportedOutputTokens = 0;
-    let estimatedInputTokens = 0;
-    let estimatedOutputTokens = 0;
-
-    for (const message of chat.messages) {
-      const metadata = message.metadata as UsageMetadata | undefined;
-      reportedInputTokens += metadata?.usage?.inputTokens ?? 0;
-      reportedOutputTokens += metadata?.usage?.outputTokens ?? 0;
-
-      const estimatedTokens = estimateTokens(
-        message.parts
-          .map((part) => partText(part) || reasoningText(part))
-          .join("\n"),
-      );
-
-      if (message.role === "user") estimatedInputTokens += estimatedTokens;
-      else if (message.role === "assistant") estimatedOutputTokens += estimatedTokens;
-    }
-
-    const hasReportedUsage = reportedInputTokens > 0 || reportedOutputTokens > 0;
-    const inputTokens = hasReportedUsage ? reportedInputTokens : estimatedInputTokens;
-    const outputTokens = hasReportedUsage ? reportedOutputTokens : estimatedOutputTokens;
-    const cost =
-      (inputTokens / 1_000_000) * MODEL_INPUT_COST_PER_MILLION +
-      (outputTokens / 1_000_000) * MODEL_OUTPUT_COST_PER_MILLION;
-
-    return {
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      cost,
-      estimated: !hasReportedUsage,
-    };
-  }
-
-  function estimateTokens(text: string): number {
-    if (!text.trim()) return 0;
-    return Math.ceil(text.length / 4);
   }
 
   function latestAssistantToolCallsResolved(messages: UIMessage[]): boolean {
@@ -236,7 +175,13 @@
 
       <div class="tool-list">
         {#each tools as tool}
-          <button class:enabled={enabledTools.has(tool.name)} class="tool-toggle" type="button" onclick={() => toggleTool(tool.name)}>
+          <button
+            class:enabled={enabledTools.has(tool.name)}
+            class="tool-toggle"
+            type="button"
+            aria-pressed={enabledTools.has(tool.name)}
+            onclick={() => toggleTool(tool.name)}
+          >
             <span>
               <strong>{tool.label}</strong>
               <small>{tool.description}</small>
@@ -252,19 +197,20 @@
         <div class="usage-group">
           <code>{MODEL_ID}</code>
           <div class="usage-meta" title="Gemma 4 cost estimate at $0.10/M input and $0.30/M output tokens">
-            <span>{completedUsage.inputTokens.toLocaleString()} in</span>
-            <span>{completedUsage.outputTokens.toLocaleString()} out</span>
+            <span>{usage.inputTokens.toLocaleString()} in</span>
+            <span>{usage.outputTokens.toLocaleString()} out</span>
             <strong>{formattedCost}</strong>
-            {#if completedUsage.estimated}<em>est.</em>{/if}
+            {#if usage.estimated}<em>est.</em>{/if}
           </div>
         </div>
         <div class="route-meta">
-          <span>{chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle"}</span>
+          <span>{status}</span>
         </div>
       </footer>
     </aside>
 
     <section class="chat">
+      <LiveStatus message={status} />
       <div bind:this={scrollContainer} class="messages">
         {#if chat.messages.length === 0}
           <div class="empty">
@@ -315,7 +261,9 @@
           disabled={!agent.connected || chat.isStreaming}
           placeholder={activeTools.length ? "Ask the agent to use a browser tool..." : "Enable a tool to try dynamic tool calls..."}
           rows="1"
+          aria-label="Message"
           onkeydown={(event) => {
+            if (event.isComposing) return;
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               send();

@@ -29,50 +29,47 @@ The Agent Worker uses a remote Workers AI binding:
 "ai": { "binding": "AI", "remote": true }
 ```
 
-Local AI calls use your Wrangler Cloudflare session. Log in before running the Agent Worker:
-
-```bash
-pnpm exec wrangler login
-```
+Local AI calls use your Wrangler Cloudflare session. If you are already logged in, you can skip the login command below.
 
 ## Run locally
 
-Install dependencies:
+Clone this repository, then run from this example directory:
 
 ```bash
 pnpm install
+pnpm exec wrangler login
 ```
 
-The Vite dev server proxies `/agents/*` to the Agent Worker on port 8787, so the default local setup does not need `PUBLIC_AGENT_HOST`.
+The Vite dev server proxies `/agents/*` to the Agent Worker on `127.0.0.1:8787`, so the default local setup does not need `PUBLIC_AGENT_HOST`.
 
-In terminal 1, start the Agent Worker:
-
-```bash
-pnpm run worker
-```
-
-In terminal 2, start the SvelteKit app:
+Start both the SvelteKit app and Agent Worker with one command:
 
 ```bash
 pnpm run dev
 ```
 
-Open the local URL printed by Vite.
+Open the local URL printed by Vite. The command starts both the SvelteKit app and the Agent Worker.
+
+For debugging, you can still run the processes separately:
+
+```bash
+pnpm run dev:worker
+pnpm run dev:app
+```
 
 To bypass the Vite proxy and connect directly to the Agent Worker, run the SvelteKit app with:
 
 ```bash
-PUBLIC_AGENT_HOST=localhost:8787 pnpm run dev
+PUBLIC_AGENT_HOST=127.0.0.1:8787 pnpm run dev
 ```
 
-## Validate
+## Build
 
 ```bash
-pnpm run check
 pnpm run build
 ```
 
-To validate the Agent Worker deploy shape without publishing it:
+Preview the Agent Worker deploy without publishing:
 
 ```bash
 pnpm exec wrangler deploy --dry-run --config wrangler.agent.jsonc
@@ -87,6 +84,8 @@ pnpm exec wrangler deploy --config wrangler.agent.jsonc
 ```
 
 Then deploy the SvelteKit Worker.
+
+Your deployed SvelteKit Worker must be able to reach the Agent Worker. Either route `/agents/*` to the Agent Worker on the same host, or configure `PUBLIC_AGENT_HOST`.
 
 If `/agents/*` is routed to the Agent Worker on the same host as the SvelteKit app, you do not need `PUBLIC_AGENT_HOST`:
 

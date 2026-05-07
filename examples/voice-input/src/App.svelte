@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { createVoiceInput } from "agents-svelte/voice";
+  import LiveStatus from "../../_shared/LiveStatus.svelte";
 
   const voice = createVoiceInput({ agent: "VoiceInputAgent" });
 
@@ -14,6 +15,7 @@
         : ""),
   );
   const audioLevelWidth = $derived(`${Math.min(voice.audioLevel * 500, 100)}%`);
+  const status = $derived(voice.error ? "Error" : voice.isListening ? "Streaming audio" : "Idle");
 
   onDestroy(() => {
     if (copyTimeout) clearTimeout(copyTimeout);
@@ -62,12 +64,14 @@
         </div>
       </div>
       <div class="route-meta">
-        <span>{voice.error ? "Error" : voice.isListening ? "Streaming audio" : "Idle"}</span>
+        <span>{status}</span>
       </div>
     </div>
   </div>
 
-  <main class="content" aria-live="polite">
+  <LiveStatus message={status} />
+
+  <main class="content">
     <div class="content-inner">
       <section class="empty info-card" aria-labelledby="voice-input-title">
         <div class="empty-icon">🎙️</div>
@@ -119,7 +123,7 @@
           <button class="secondary" type="button" onclick={() => voice.stop()}>
             Stop
           </button>
-          <button class="ghost" type="button" onclick={() => voice.toggleMute()}>
+          <button class="ghost" type="button" aria-pressed={voice.isMuted} onclick={() => voice.toggleMute()}>
             {voice.isMuted ? "Unmute" : "Mute"}
           </button>
         {/if}

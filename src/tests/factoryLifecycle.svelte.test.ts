@@ -43,6 +43,20 @@ vi.mock("partysocket", () => ({
   PartySocket: MockPartySocket,
 }));
 
+vi.mock("agents/client", () => ({
+  AgentClient: MockPartySocket,
+  createStubProxy: (call: (method: string, args: unknown[]) => unknown) =>
+    new Proxy(
+      {},
+      {
+        get: (_target, method) => {
+          if (typeof method !== "string" || method === "then" || method === "toJSON") return;
+          return (...args: unknown[]) => call(method, args);
+        },
+      },
+    ),
+}));
+
 function createFakeVoiceTransport() {
   const connect = vi.fn(() => {
     transport.connected = true;

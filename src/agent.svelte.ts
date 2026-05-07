@@ -1,5 +1,4 @@
 import { onDestroy, onMount, untrack } from "svelte";
-import PartySocket from "partysocket";
 import type {
   AgentPromiseReturnType,
   AgentStub,
@@ -8,7 +7,7 @@ import type {
   StreamOptions,
   UntypedAgentStub,
 } from "agents/client";
-import { createStubProxy } from "agents/client";
+import { AgentClient, createStubProxy } from "agents/client";
 import type { MCPServersState, RPCRequest, RPCResponse } from "agents";
 import { MessageType } from "agents/types";
 import { camelCaseToKebabCase } from "./utils.ts";
@@ -139,7 +138,7 @@ export interface IdentityChange {
 export class Agent<AgentT = unknown, State = unknown> {
   readonly path: ReadonlyArray<AgentRouteSegment>;
 
-  #connection = $state<{ socket: PartySocket | null }>({ socket: null });
+  #connection = $state<{ socket: AgentClient<AgentT, State> | null }>({ socket: null });
 
   state = $state<State | undefined>(undefined);
   identity = $state<Identity>({
@@ -206,7 +205,7 @@ export class Agent<AgentT = unknown, State = unknown> {
     this.stub = createStubProxy(this.#call as UntypedCall) as Agent<AgentT, State>["stub"];
   }
 
-  get socket(): PartySocket | null {
+  get socket(): AgentClient<AgentT, State> | null {
     return this.#connection.socket;
   }
 
@@ -384,7 +383,11 @@ export class Agent<AgentT = unknown, State = unknown> {
     const socketOpts = subPath
       ? { ...baseSocketOpts, basePath: route }
       : { ...baseSocketOpts, ...routingOpts };
-    const socket = new PartySocket(socketOpts);
+    const socket = new AgentClient<AgentT, State>({
+      agent: agentNamespace,
+      name: roomName,
+      ...socketOpts,
+    });
     socket.addEventListener("message", this.#handleMessage);
     socket.addEventListener("open", this.#handleOpen);
     socket.addEventListener("close", this.#handleClose);
@@ -545,7 +548,7 @@ export class Agent<AgentT = unknown, State = unknown> {
 
   #handleError = (_e: Event) => {};
 
-  #detachSocket(socket: PartySocket, close: boolean): void {
+  #detachSocket(socket: AgentClient<AgentT, State>, close: boolean): void {
     socket.removeEventListener("message", this.#handleMessage);
     socket.removeEventListener("open", this.#handleOpen);
     socket.removeEventListener("close", this.#handleClose);
@@ -585,7 +588,7 @@ export class Agent<AgentT = unknown, State = unknown> {
     }
   }
 
-  #requireSocket(operation: string): PartySocket {
+  #requireSocket(operation: string): AgentClient<AgentT, State> {
     if (!this.#connection.socket) {
       throw new Error(`[agents-svelte] ${operation} requires a connected Agent`);
     }

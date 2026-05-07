@@ -1,6 +1,6 @@
 # Agents as tools
 
-Svelte version of Cloudflare's Agents-as-tools example.
+Svelte app showing a parent Cloudflare Agent dispatching helper Agents as tools.
 
 A parent `Assistant` chat Agent exposes tools that dispatch helper Agents:
 
@@ -26,22 +26,21 @@ The Worker uses a remote Workers AI binding:
 "ai": { "binding": "AI", "remote": true }
 ```
 
-Local AI calls use your Wrangler Cloudflare session. Log in before running the dev server:
-
-```bash
-pnpm exec wrangler login
-```
+Local AI calls use your Wrangler Cloudflare session. If you are already logged in, you can skip the login command below.
 
 ## Run locally
 
+Clone this repository, then run from this example directory:
+
 ```bash
 pnpm install
+pnpm exec wrangler login
 pnpm run dev
 ```
 
 Open the local URL printed by Vite.
 
-Try:
+## Try it
 
 ```txt
 Compare Durable Objects and KV for chat history
@@ -49,10 +48,9 @@ Research Svelte runes
 Plan a refactor for duplicated auth checks
 ```
 
-## Validate
+## Build
 
 ```bash
-pnpm run check
 pnpm run build
 ```
 
@@ -61,4 +59,12 @@ pnpm run build
 ```bash
 pnpm run build
 pnpm exec wrangler deploy
+```
+
+## Model
+
+This example uses Workers AI with:
+
+```txt
+@cf/google/gemma-4-26b-a4b-it
 ```
