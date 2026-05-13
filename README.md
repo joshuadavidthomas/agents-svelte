@@ -114,28 +114,26 @@ import { convertToModelMessages, streamText } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
 
 type Env = {
-    AI: Ai;
-    ChatAgent: DurableObjectNamespace<ChatAgent>;
+  AI: Ai;
+  ChatAgent: DurableObjectNamespace<ChatAgent>;
 };
 
 export class ChatAgent extends AIChatAgent<Env> {
-    async onChatMessage() {
-        const workersai = createWorkersAI({ binding: this.env.AI });
-        const result = streamText({
-            model: workersai("@cf/google/gemma-4-26b-a4b-it"),
-            messages: await convertToModelMessages(this.messages),
-        });
+  async onChatMessage() {
+    const workersai = createWorkersAI({ binding: this.env.AI });
+    const result = streamText({
+      model: workersai("@cf/google/gemma-4-26b-a4b-it"),
+      messages: await convertToModelMessages(this.messages),
+    });
 
-        return result.toUIMessageStreamResponse();
-    }
+    return result.toUIMessageStreamResponse();
+  }
 }
 
 export default {
-    async fetch(request: Request, env: Env) {
-        return (
-            (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 })
-        );
-    },
+  async fetch(request: Request, env: Env) {
+    return (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 });
+  },
 } satisfies ExportedHandler<Env>;
 ```
 
@@ -143,28 +141,28 @@ Add the AI binding, Durable Object binding, and migration to `wrangler.jsonc`:
 
 ```jsonc
 {
-    "name": "chat-agent",
-    "main": "src/server.ts",
-    "compatibility_date": "2026-04-25",
-    "compatibility_flags": ["nodejs_compat"],
-    "ai": {
-        "binding": "AI",
-        "remote": true,
-    },
-    "durable_objects": {
-        "bindings": [
-            {
-                "name": "ChatAgent",
-                "class_name": "ChatAgent",
-            },
-        ],
-    },
-    "migrations": [
-        {
-            "tag": "v1",
-            "new_sqlite_classes": ["ChatAgent"],
-        },
+  "name": "chat-agent",
+  "main": "src/server.ts",
+  "compatibility_date": "2026-04-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI",
+    "remote": true,
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ChatAgent",
+        "class_name": "ChatAgent",
+      },
     ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChatAgent"],
+    },
+  ],
 }
 ```
 
