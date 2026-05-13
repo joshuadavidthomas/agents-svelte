@@ -14,7 +14,7 @@ Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/
 ## Installation
 
 ```bash
-npm install agents-svelte
+npm install agents-svelte agents
 ```
 
 For chat:
@@ -270,6 +270,8 @@ For async query functions, `Agent` waits for the query to resolve before opening
 
 Read `chat.messages`, `chat.status`, `chat.error`, and `chat.isStreaming` directly in markup. Use `chat.sendMessage(...)`, `chat.stop()`, `chat.clearHistory()`, and `chat.addToolApprovalResponse(...)` from event handlers.
 
+By default, local stream cleanup does not cancel a running server turn, so the turn can resume after reconnect. Call `chat.stop()` to cancel the server turn, or pass `cancelOnClientAbort: true` to restore cancellation on client cleanup.
+
 Tool call handles expose `toolName`, `input`, `addOutput(...)`, and `run(...)`. Repeated `run(...)` calls share the same in-flight execution.
 
 For AI SDK approval parts, resolve the approval with `chat.addToolApprovalResponse(...)`.
@@ -336,6 +338,8 @@ On the server, use `createToolsFromClientSchemas(options.clientTools)` to expose
 ```
 
 Read `voice.status`, `voice.transcript`, `voice.interimTranscript`, `voice.audioLevel`, and `voice.isMuted` in markup. Use `voice.startCall()`, `voice.endCall()`, `voice.toggleMute()`, and `voice.sendText(text)` from event handlers.
+
+Pass `enabled: false` to delay connecting, then call `voice.setEnabled(true)` when the voice transport should start.
 
 ### Voice input
 
