@@ -1,13 +1,13 @@
-name: test
+name: e2e
 
 on:
-  pull_request:
   push:
     branches: [main]
   workflow_call:
+  workflow_dispatch:
 
 concurrency:
-  group: test-${{ github.ref }}
+  group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -16,8 +16,9 @@ env:
 permissions: {}
 
 jobs:
-  test:
+  e2e:
     runs-on: ubuntu-latest
+    environment: cloudflare
     permissions:
       contents: read
     steps:
@@ -42,4 +43,7 @@ jobs:
         run: pnpm exec playwright install
 
       - name: Run tests
-        run: pnpm run test
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm run test:e2e

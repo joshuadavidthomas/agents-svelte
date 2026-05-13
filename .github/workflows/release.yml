@@ -6,7 +6,7 @@ on:
       - "v*"
 
 concurrency:
-  group: release-${{ github.head_ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -21,9 +21,12 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
 
+  e2e:
+    uses: ./.github/workflows/e2e.yml
+
   publish:
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test, e2e]
     environment: release
     permissions:
       attestations: write
