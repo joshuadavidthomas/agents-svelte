@@ -14,7 +14,7 @@ Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/
 ## Installation
 
 ```bash
-npm install agents-svelte agents
+npm install agents-svelte
 ```
 
 For chat:
