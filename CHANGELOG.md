@@ -18,6 +18,16 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Added `cancelOnClientAbort` to `createAgentChat`.
+- Added `enabled` support to `createVoiceAgent`.
+
+### Changed
+
+- Updated Cloudflare Agents SDK packages to `agents@0.12.4`, `@cloudflare/ai-chat@0.7.0`, and `@cloudflare/voice@0.2.0`.
+- Matched upstream chat cleanup behavior: local cleanup does not cancel server turns by default, while `stop()` still cancels them.
+
 ## [0.1.0]
 
 Initial release! 🎉
