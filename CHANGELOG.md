@@ -18,6 +18,8 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
 - Added `cancelOnClientAbort` to `createAgentChat`.
@@ -45,5 +47,6 @@ Initial release! 🎉
 - Added README documentation.
 - Added initial unit, type, and browser E2E tests.
 
-[Unreleased]: https://github.com/joshuadavidthomas/agents-svelte/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/joshuadavidthomas/agents-svelte/compare/v0.2.0...HEAD
 [0.1.0]: https://github.com/joshuadavidthomas/agents-svelte/releases/tag/v0.1.0
+[0.2.0]: https://github.com/joshuadavidthomas/agents-svelte/releases/tag/v0.2.0
