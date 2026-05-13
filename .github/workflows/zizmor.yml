@@ -12,7 +12,7 @@ on:
       - .github/zizmor.yml
 
 concurrency:
-  group: test-${{ github.head_ref }}
+  group: zizmor-${{ github.head_ref }}
   cancel-in-progress: true
 
 permissions: {}
