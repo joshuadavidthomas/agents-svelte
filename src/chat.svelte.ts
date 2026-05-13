@@ -148,6 +148,13 @@ export interface CreateAgentChatOptions<M extends UIMessage = UIMessage> extends
   clientTools?: readonly ClientToolSchema[] | (() => readonly ClientToolSchema[] | undefined);
   /** Set false to disable automatic stream resumption on connect. */
   resume?: boolean;
+  /**
+   * Whether generic client-side stream abort/cleanup should cancel the
+   * server turn. Explicit `stop()` always cancels the server turn.
+   *
+   * @default false
+   */
+  cancelOnClientAbort?: boolean;
 }
 
 export async function getAgentMessages<M extends UIMessage = UIMessage>(
@@ -265,6 +272,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
             }
           : null;
       },
+      cancelOnClientAbort: options.cancelOnClientAbort,
       prepareBody: async ({ messages: msgs, trigger, messageId }) => {
         let extra: Record<string, unknown> = {};
         if (bodyOption) {
@@ -309,10 +317,11 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
     const baseStop = this.stop.bind(this) as Chat<M>["stop"];
     this.stop = (async () => {
+      this.#transport.cancelActiveStreams();
       try {
         await baseStop();
       } finally {
-        this.#transport.abortActiveContinuation();
+        this.#transport.abortActiveContinuation({ cancelServer: true });
       }
     }) as Chat<M>["stop"];
 
@@ -530,7 +539,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
 
     this.#closed = true;
-    void this.stop().catch(() => {});
+    if (this.#options.cancelOnClientAbort) {
+      this.#transport.cancelActiveStreams();
+      this.#transport.abortActiveContinuation({ cancelServer: true });
+    }
     this.#cleanupPendingToolCallsEffect?.();
     this.#cleanupPendingToolCallsEffect = null;
     this.#resetLocalTransientState();

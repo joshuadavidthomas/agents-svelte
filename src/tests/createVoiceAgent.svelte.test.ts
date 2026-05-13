@@ -87,6 +87,27 @@ describe("VoiceAgent", () => {
     expect(v.isMuted).toBe(false);
   });
 
+  it("does not connect when disabled", () => {
+    const v = makeVoice({ enabled: false });
+
+    expect(v.connected).toBe(false);
+    expect(transportConnect).not.toHaveBeenCalled();
+
+    v.setEnabled(true);
+
+    expect(transportConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("disconnects when disabled after connecting", async () => {
+    const v = makeVoice();
+    await vi.waitFor(() => expect(v.connected).toBe(true));
+
+    v.setEnabled(false);
+
+    expect(transportDisconnect).toHaveBeenCalledTimes(1);
+    expect(v.connected).toBe(false);
+  });
+
   it("can connect again after close", async () => {
     const v = makeVoice();
     await vi.waitFor(() => expect(v.connected).toBe(true));
