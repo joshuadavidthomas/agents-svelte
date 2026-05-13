@@ -18,7 +18,9 @@ function readmeAsideHtmlPlugin(): Plugin {
     enforce: "pre",
     async resolveId(source, importer) {
       if (!source.endsWith(QUERY)) return null;
-      const resolved = await this.resolve(source.slice(0, -QUERY.length), importer, { skipSelf: true });
+      const resolved = await this.resolve(source.slice(0, -QUERY.length), importer, {
+        skipSelf: true,
+      });
       return resolved ? resolved.id + QUERY : null;
     },
     async load(id) {
