@@ -37,6 +37,11 @@ function subscribeToVoiceEvent<K extends VoiceClientEvent>(
   });
 }
 
+export interface VoiceAgentOptions extends VoiceClientOptions {
+  /** Whether the client should connect automatically. @default true */
+  enabled?: boolean;
+}
+
 export class VoiceAgent {
   readonly #client: VoiceClient;
   readonly #statusChanged: () => void;
@@ -49,9 +54,12 @@ export class VoiceAgent {
   readonly #errorChanged: () => void;
   readonly #customMessageChanged: () => void;
   #connectStarted = false;
+  #enabled = true;
 
-  constructor(options: VoiceClientOptions) {
-    this.#client = new VoiceClient(options);
+  constructor(options: VoiceAgentOptions) {
+    const { enabled = true, ...clientOptions } = options;
+    this.#enabled = enabled;
+    this.#client = new VoiceClient(clientOptions);
     this.#statusChanged = subscribeToVoiceEvent(this.#client, "statuschange");
     this.#transcriptChanged = subscribeToVoiceEvent(this.#client, "transcriptchange");
     this.#interimTranscriptChanged = subscribeToVoiceEvent(this.#client, "interimtranscript");
@@ -64,9 +72,19 @@ export class VoiceAgent {
   }
 
   connect(): void {
-    if (this.#connectStarted) return;
+    if (!this.#enabled || this.#connectStarted) return;
     this.#connectStarted = true;
     this.#client.connect();
+  }
+
+  setEnabled(enabled: boolean): void {
+    if (this.#enabled === enabled) return;
+    this.#enabled = enabled;
+    if (enabled) {
+      this.connect();
+      return;
+    }
+    this.close();
   }
 
   get status(): VoiceStatus {
@@ -128,8 +146,11 @@ export class VoiceAgent {
   }
 }
 
-export function createVoiceAgent(options: VoiceClientOptions): VoiceAgent {
+export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
   const v = new VoiceAgent(options);
+  $effect(() => {
+    v.setEnabled(options.enabled ?? true);
+  });
   onMount(() => v.connect());
   onDestroy(() => v.close());
   return v;

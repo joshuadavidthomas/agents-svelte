@@ -6,6 +6,7 @@ export {
   WebSocketVoiceTransport,
 } from "./voice.svelte.ts";
 export type {
+  VoiceAgentOptions,
   VoiceInputOptions,
   VoiceStatus,
   VoiceRole,

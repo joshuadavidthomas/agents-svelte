@@ -439,6 +439,62 @@ describe("createAgentChat — clearHistory", () => {
     });
   });
 
+  it("does not cancel the server turn on local close by default", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    void chat.sendMessage({ text: "hello" }).catch(() => {});
+
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toBeDefined();
+    });
+
+    chat.close();
+
+    expect(findSent(mock, MessageType.CF_AGENT_CHAT_REQUEST_CANCEL)).toBeUndefined();
+  });
+
+  it("cancels the server turn on local close when requested", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { cancelOnClientAbort: true });
+    await waitForChatInitialized(chat);
+
+    void chat.sendMessage({ text: "hello" }).catch(() => {});
+
+    let requestId = "";
+    await vi.waitFor(() => {
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
+      expect(requestId).not.toBe("");
+    });
+
+    chat.close();
+
+    expect(findSent(mock, MessageType.CF_AGENT_CHAT_REQUEST_CANCEL)).toMatchObject({
+      id: requestId,
+    });
+  });
+
+  it("cancels the server turn on explicit stop", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    void chat.sendMessage({ text: "hello" }).catch(() => {});
+
+    let requestId = "";
+    await vi.waitFor(() => {
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
+      expect(requestId).not.toBe("");
+    });
+
+    await chat.stop();
+
+    expect(findSent(mock, MessageType.CF_AGENT_CHAT_REQUEST_CANCEL)).toMatchObject({
+      id: requestId,
+    });
+  });
+
   it("ignores late chunks from an active local stream after clearing", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock);

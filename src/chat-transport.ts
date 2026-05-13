@@ -44,6 +44,7 @@ export type AgentChatTransportEvent<ChatMessage extends UIMessage = UIMessage> =
 type AgentChatTransportOptions<ChatMessage extends UIMessage = UIMessage> = {
   getConnection: () => AgentChatConnection | null;
   prepareBody?: PrepareBody<ChatMessage>;
+  cancelOnClientAbort?: boolean;
 };
 
 type AgentChatTransportStartOptions<ChatMessage extends UIMessage = UIMessage> = {
@@ -83,6 +84,7 @@ export class AgentChatTransport<
   readonly #getConnection: () => AgentChatConnection | null;
   #startedConnection: AgentChatConnection | null = null;
   readonly #prepareBody?: PrepareBody<ChatMessage>;
+  readonly #cancelOnClientAbort: boolean;
   #onEvent: ((event: AgentChatTransportEvent<ChatMessage>) => void) | null = null;
   #shouldAcceptBroadcastResume: (() => boolean) | null = null;
   readonly #activeStreams = new Map<string, ActiveStreamSession>();
@@ -92,13 +94,14 @@ export class AgentChatTransport<
 
   #pendingResume: PendingResume | null = null;
   #expectToolContinuation = false;
-  #abortActiveContinuation: (() => boolean) | null = null;
+  #abortActiveContinuation: ((cancelServer: boolean) => boolean) | null = null;
   #started = false;
   #closed = false;
 
   constructor(options: AgentChatTransportOptions<ChatMessage>) {
     this.#getConnection = options.getConnection;
     this.#prepareBody = options.prepareBody;
+    this.#cancelOnClientAbort = options.cancelOnClientAbort ?? false;
   }
 
   start(options: AgentChatTransportStartOptions<ChatMessage>): void {
@@ -131,8 +134,8 @@ export class AgentChatTransport<
     this.#expectToolContinuation = true;
   }
 
-  abortActiveContinuation(): boolean {
-    return this.#abortActiveContinuation?.() ?? false;
+  abortActiveContinuation(options: { cancelServer?: boolean } = {}): boolean {
+    return this.#abortActiveContinuation?.(options.cancelServer ?? true) ?? false;
   }
 
   sendMessagesSnapshot(messages: ChatMessage[]): void {
@@ -240,13 +243,15 @@ export class AgentChatTransport<
 
     const onAbort = () => {
       if (completed) return;
-      try {
-        this.#send({
-          id: requestId,
-          type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL,
-        });
-      } catch {
-        // Ignore failures, e.g. if the connection is already closed.
+      if (this.#cancelOnClientAbort) {
+        try {
+          this.#send({
+            id: requestId,
+            type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL,
+          });
+        } catch {
+          // Ignore failures, e.g. if the connection is already closed.
+        }
       }
       session?.finish(() => session?.controller.error(abortError), {
         ignoreRemaining: true,
@@ -333,7 +338,7 @@ export class AgentChatTransport<
     }
     this.#pendingResume?.cancel();
     this.#pendingResume = null;
-    this.#abortActiveContinuation?.();
+    this.#abortActiveContinuation?.(false);
     for (const session of this.#activeStreams.values()) {
       const abortError = new Error("Aborted");
       abortError.name = "AbortError";
@@ -387,12 +392,12 @@ export class AgentChatTransport<
       }
     };
 
-    this.#abortActiveContinuation = () => {
+    this.#abortActiveContinuation = (cancelServer) => {
       if (completed) {
         return false;
       }
 
-      if (requestId) {
+      if (cancelServer && requestId) {
         try {
           this.#send({
             type: MessageType.CF_AGENT_CHAT_REQUEST_CANCEL,
