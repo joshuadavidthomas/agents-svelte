@@ -17,12 +17,19 @@ permissions: {}
 jobs:
   lint:
     uses: ./.github/workflows/lint.yml
+    permissions:
+      contents: read
 
   test:
     uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
 
   e2e:
     uses: ./.github/workflows/e2e.yml
+    permissions:
+      contents: read
+    secrets: inherit
 
   publish:
     runs-on: ubuntu-latest
