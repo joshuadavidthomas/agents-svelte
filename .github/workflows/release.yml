@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.head_ref }}
+  cancel-in-progress: true
+
 env:
   NODE_VERSION: "22"
 
@@ -50,7 +54,7 @@ jobs:
         run: pnpm publish dist/*.tgz --access public --provenance --no-git-checks
 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@b3e506e8c389afc651c5bacf2b8f2a1ea0557215 # v4.1.0
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: "dist/*.tgz"
 

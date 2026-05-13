@@ -11,6 +11,12 @@ on:
       - .github/workflows/**
       - .github/zizmor.yml
 
+concurrency:
+  group: test-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
   zizmor:
     runs-on: ubuntu-latest
