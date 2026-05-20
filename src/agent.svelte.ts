@@ -2,6 +2,7 @@ import { onDestroy, onMount, untrack } from "svelte";
 import type {
   AgentPromiseReturnType,
   AgentStub,
+  CallOptions,
   OptionalAgentMethods,
   RequiredAgentMethods,
   StreamOptions,
@@ -95,18 +96,24 @@ export interface CreateAgentOptions {
   id?: string;
   prefix?: string;
   sub?: ReadonlyArray<SubAgentRoute>;
+  /** Called when the server sends the agent's identity on connect. */
+  onIdentity?: (name: string, agent: string) => void;
+  /** Called when the server changes identity on reconnect or reroute. */
+  onIdentityChange?: (oldName: string, newName: string, oldAgent: string, newAgent: string) => void;
 }
+
+type AgentCallOptions = CallOptions | StreamOptions;
 
 type OptionalArgsCall<AgentT> = <K extends keyof OptionalAgentMethods<AgentT>>(
   method: K,
   args?: Parameters<OptionalAgentMethods<AgentT>[K]>,
-  stream?: StreamOptions,
+  options?: AgentCallOptions,
 ) => AgentPromiseReturnType<AgentT, K>;
 
 type RequiredArgsCall<AgentT> = <K extends keyof RequiredAgentMethods<AgentT>>(
   method: K,
   args: Parameters<RequiredAgentMethods<AgentT>[K]>,
-  stream?: StreamOptions,
+  options?: AgentCallOptions,
 ) => AgentPromiseReturnType<AgentT, K>;
 
 type TypedCall<AgentT> = OptionalArgsCall<AgentT> & RequiredArgsCall<AgentT>;
@@ -114,7 +121,7 @@ type TypedCall<AgentT> = OptionalArgsCall<AgentT> & RequiredArgsCall<AgentT>;
 type UntypedCall = <T = unknown>(
   method: string,
   args?: unknown[],
-  stream?: StreamOptions,
+  options?: AgentCallOptions,
 ) => Promise<T>;
 
 export interface Identity {
@@ -164,6 +171,7 @@ export class Agent<AgentT = unknown, State = unknown> {
       resolve: (v: unknown) => void;
       reject: (e: Error) => void;
       stream?: StreamOptions;
+      timeoutId?: ReturnType<typeof setTimeout>;
     }
   >();
   #previousIdentity: { name: string | null; agent: string | null } = {
@@ -178,6 +186,8 @@ export class Agent<AgentT = unknown, State = unknown> {
   readonly #options: CreateAgentOptions;
   #httpUrl: string | null = null;
   #currentQuery: QueryObject | undefined;
+  #readyPromise!: Promise<void>;
+  #resolveReady!: () => void;
 
   constructor(options: CreateAgentOptions) {
     this.#options = options;
@@ -203,6 +213,11 @@ export class Agent<AgentT = unknown, State = unknown> {
 
     this.call = this.#call as Agent<AgentT, State>["call"];
     this.stub = createStubProxy(this.#call as UntypedCall) as Agent<AgentT, State>["stub"];
+    this.#resetReady();
+  }
+
+  get ready(): Promise<void> {
+    return this.#readyPromise;
   }
 
   get socket(): AgentClient<AgentT, State> | null {
@@ -376,6 +391,7 @@ export class Agent<AgentT = unknown, State = unknown> {
       protocol: options.protocol,
       protocols: options.protocols,
       query,
+      onIdentityChange: () => {},
     };
     const routingOpts = options.basePath
       ? { basePath: options.basePath }
@@ -466,6 +482,8 @@ export class Agent<AgentT = unknown, State = unknown> {
         } satisfies Identity;
         this.identity = newIdentity;
 
+        this.#resolveReady();
+
         if (
           oldName !== null &&
           oldAgent !== null &&
@@ -480,9 +498,16 @@ export class Agent<AgentT = unknown, State = unknown> {
             newIdentity,
             seq: ++this.#eventSeq,
           };
+
+          if (this.#options.onIdentityChange) {
+            this.#options.onIdentityChange(oldName, newName, oldAgent, newAgent);
+          } else {
+            this.#warnIdentityChanged(oldName, newName, oldAgent, newAgent);
+          }
         }
 
         this.#previousIdentity = { name: newName, agent: newAgent };
+        this.#options.onIdentity?.(newName, newAgent);
         return;
       }
 
@@ -588,6 +613,30 @@ export class Agent<AgentT = unknown, State = unknown> {
     }
   }
 
+  #resetReady(): void {
+    this.#readyPromise = new Promise((resolve) => {
+      this.#resolveReady = resolve;
+    });
+  }
+
+  #warnIdentityChanged(oldName: string, newName: string, oldAgent: string, newAgent: string): void {
+    const agentChanged = oldAgent !== newAgent;
+    const nameChanged = oldName !== newName;
+    let changeDescription = "";
+    if (agentChanged && nameChanged) {
+      changeDescription = `agent "${oldAgent}" → "${newAgent}", instance "${oldName}" → "${newName}"`;
+    } else if (agentChanged) {
+      changeDescription = `agent "${oldAgent}" → "${newAgent}"`;
+    } else {
+      changeDescription = `instance "${oldName}" → "${newName}"`;
+    }
+    console.warn(
+      `[agents-svelte] Identity changed on reconnect: ${changeDescription}. ` +
+        "This can happen with server-side routing where the instance is determined by auth/session. " +
+        "Use the onIdentityChange option or read lastIdentityChange if this is expected.",
+    );
+  }
+
   #requireSocket(operation: string): AgentClient<AgentT, State> {
     if (!this.#connection.socket) {
       throw new Error(`[agents-svelte] ${operation} requires a connected Agent`);
@@ -598,6 +647,7 @@ export class Agent<AgentT = unknown, State = unknown> {
   #markClosed(): void {
     this.connected = false;
     this.identity = { ...this.identity, identified: false };
+    this.#resetReady();
 
     const err = new Error("Connection closed");
     for (const p of this.#pending.values()) {
@@ -607,13 +657,38 @@ export class Agent<AgentT = unknown, State = unknown> {
     this.#pending.clear();
   }
 
-  #call = <T>(method: string, args: unknown[] = [], stream?: StreamOptions): Promise<T> => {
+  #call = <T>(method: string, args: unknown[] = [], options?: AgentCallOptions): Promise<T> => {
     return new Promise<T>((resolve, reject) => {
       const id = crypto.randomUUID();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const isLegacyFormat =
+        options && ("onChunk" in options || "onDone" in options || "onError" in options);
+      const stream = isLegacyFormat
+        ? (options as StreamOptions)
+        : (options as CallOptions | undefined)?.stream;
+      const timeout = isLegacyFormat ? undefined : (options as CallOptions | undefined)?.timeout;
+
+      if (timeout) {
+        timeoutId = setTimeout(() => {
+          const pending = this.#pending.get(id);
+          this.#pending.delete(id);
+          const errorMessage = `RPC call to ${method} timed out after ${timeout}ms`;
+          pending?.stream?.onError?.(errorMessage);
+          reject(new Error(errorMessage));
+        }, timeout);
+      }
+
       this.#pending.set(id, {
-        resolve: resolve as (v: unknown) => void,
-        reject,
+        resolve: (value: unknown) => {
+          if (timeoutId) clearTimeout(timeoutId);
+          resolve(value as T);
+        },
+        reject: (error: Error) => {
+          if (timeoutId) clearTimeout(timeoutId);
+          reject(error);
+        },
         stream,
+        timeoutId,
       });
       const req: RPCRequest = {
         type: MessageType.RPC,
@@ -625,6 +700,7 @@ export class Agent<AgentT = unknown, State = unknown> {
         this.#requireSocket("agent.call()").send(JSON.stringify(req));
       } catch (error) {
         this.#pending.delete(id);
+        if (timeoutId) clearTimeout(timeoutId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });

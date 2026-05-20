@@ -187,6 +187,62 @@ describe("createAgentChat — initial messages", () => {
     }
   });
 
+  it("merges late initial messages with an immediate first send", async () => {
+    const mock = createMockAgent({ name: "late-hydration-first-send" });
+    let resolveMessages!: (messages: UIMessage[]) => void;
+    const getInitialMessages = vi.fn(
+      () =>
+        new Promise<UIMessage[]>((resolve) => {
+          resolveMessages = resolve;
+        }),
+    );
+    const chat = makeChat(mock, { getInitialMessages });
+
+    void chat.sendMessage({ text: "First message" }).catch(() => {});
+
+    await vi.waitFor(() => {
+      expect(chat.messages.some((message) => message.role === "user")).toBe(true);
+    });
+
+    resolveMessages([
+      {
+        id: "persisted-history",
+        role: "assistant",
+        parts: [{ type: "text", text: "Persisted history" }],
+      },
+    ]);
+    await waitForChatInitialized(chat);
+
+    expect(chat.messages[0]).toMatchObject({ id: "persisted-history" });
+    expect(chat.messages.some((message) => JSON.stringify(message).includes("First message"))).toBe(
+      true,
+    );
+  });
+
+  it("does not hydrate late initial messages after a deliberate clear", async () => {
+    const mock = createMockAgent({ name: "late-hydration-cleared" });
+    let resolveMessages!: (messages: UIMessage[]) => void;
+    const getInitialMessages = vi.fn(
+      () =>
+        new Promise<UIMessage[]>((resolve) => {
+          resolveMessages = resolve;
+        }),
+    );
+    const chat = makeChat(mock, { getInitialMessages });
+
+    chat.clearHistory();
+    resolveMessages([
+      {
+        id: "stale-history",
+        role: "assistant",
+        parts: [{ type: "text", text: "Stale history" }],
+      },
+    ]);
+    await waitForChatInitialized(chat);
+
+    expect(chat.messages).toEqual([]);
+  });
+
   it("surfaces default fetch errors via initialLoadError and still initializes", async () => {
     const name = `default-fetch-error-${Date.now()}-${Math.random()}`;
     const mock = createMockAgent({
@@ -902,6 +958,41 @@ describe("createAgentChat — approval wire protocol", () => {
       toolCallId: "call-9",
       approved: true,
       autoContinue: true,
+    });
+  });
+
+  it("marks denied approvals as output-denied locally", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat<UIMessage>(mock, {
+      initialMessages: [
+        {
+          id: "asst-denied-approval",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-delete-file",
+              toolCallId: "call-denied-approval",
+              state: "approval-requested",
+              approval: { id: "appr-denied" },
+            } as unknown as UIMessage["parts"][number],
+          ],
+        },
+      ],
+    });
+    await waitForChatInitialized(chat);
+
+    chat.addToolApprovalResponse({ id: "appr-denied", approved: false });
+    flushSync();
+
+    const approvalPart = chat.messages[0]?.parts[0] as {
+      state?: string;
+      approval?: { approved?: boolean };
+    };
+    expect(approvalPart.state).toBe("output-denied");
+    expect(approvalPart.approval?.approved).toBe(false);
+    expect(findSent(mock, MessageType.CF_AGENT_TOOL_APPROVAL)).toMatchObject({
+      toolCallId: "call-denied-approval",
+      approved: false,
     });
   });
 
@@ -2035,6 +2126,28 @@ describe("createAgentChat — isStreaming flag", () => {
 
     expect(chat.isServerStreaming).toBe(true);
     expect(chat.isStreaming).toBe(true);
+  });
+
+  it("isStreaming covers pending client tools and tool continuations", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, {
+      initialMessages: [seedToolPart("pending-streaming", "get-weather")],
+    });
+    await waitForChatInitialized(chat);
+
+    expect(chat.pendingToolCalls).toHaveLength(1);
+    expect(chat.isStreaming).toBe(true);
+
+    chat.pendingToolCalls[0]!.addOutput({ output: { weather: "sunny" } });
+    flushSync();
+
+    expect(chat.isToolContinuation).toBe(true);
+    expect(chat.isStreaming).toBe(true);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    await vi.waitFor(() => {
+      expect(chat.isToolContinuation).toBe(false);
+    });
   });
 });
 

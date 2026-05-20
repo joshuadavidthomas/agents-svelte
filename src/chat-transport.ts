@@ -84,7 +84,7 @@ export class AgentChatTransport<
   readonly #getConnection: () => AgentChatConnection | null;
   #startedConnection: AgentChatConnection | null = null;
   readonly #prepareBody?: PrepareBody<ChatMessage>;
-  readonly #cancelOnClientAbort: boolean;
+  #cancelOnClientAbort: boolean;
   #onEvent: ((event: AgentChatTransportEvent<ChatMessage>) => void) | null = null;
   #shouldAcceptBroadcastResume: (() => boolean) | null = null;
   readonly #activeStreams = new Map<string, ActiveStreamSession>();
@@ -132,6 +132,10 @@ export class AgentChatTransport<
 
   prepareToolContinuation(): void {
     this.#expectToolContinuation = true;
+  }
+
+  setCancelOnClientAbort(cancelOnClientAbort: boolean): void {
+    this.#cancelOnClientAbort = cancelOnClientAbort;
   }
 
   abortActiveContinuation(options: { cancelServer?: boolean } = {}): boolean {

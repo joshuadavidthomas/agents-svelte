@@ -18,6 +18,22 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Added `agent.ready`, `onIdentity`, `onIdentityChange`, and RPC `{ timeout, stream }` options to the Agent controller.
+- Added `chat.isToolContinuation` for distinguishing tool continuation streams from new user submissions.
+
+### Changed
+
+- Updated Cloudflare Agents SDK packages to `agents@0.13.0` and `@cloudflare/ai-chat@0.7.1`.
+- Matched upstream chat initial-message behavior so late history hydration preserves optimistic sends while socket-pushed snapshots remain authoritative.
+- Expanded `chat.isStreaming` to include pending client-side tool calls and tool continuations.
+
+### Fixed
+
+- Mark denied tool approvals as `output-denied` locally.
+- Avoid duplicate upstream identity-change warnings from the wrapped Agent client.
+
 ## [0.2.0]
 
 ### Added

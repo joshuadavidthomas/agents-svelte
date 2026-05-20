@@ -209,8 +209,9 @@ Read `agent.state`, `agent.connected`, and `agent.identity` directly in markup. 
 
 Notes:
 
-- The primary readiness signal is `agent.identity.identified`.
-- State and identity transitions are reactive fields, not constructor callbacks.
+- The primary readiness signal is `agent.identity.identified`; imperative code can also `await agent.ready` after `.connect()`.
+- State and identity transitions are reactive fields. Use `onIdentity` or `onIdentityChange` only for side effects outside Svelte reactivity.
+- `agent.call(...)` accepts Cloudflare's RPC options, including `{ timeout, stream }`.
 - `agent.socket` is `null` before `.connect()` and after explicit `.close()`.
 - Passing `agent: "ChatAgent"` is normalized to the route segment `chat-agent`.
 
@@ -268,7 +269,7 @@ For async query functions, `Agent` waits for the query to resolve before opening
 </script>
 ```
 
-Read `chat.messages`, `chat.status`, `chat.error`, and `chat.isStreaming` directly in markup. Use `chat.sendMessage(...)`, `chat.stop()`, `chat.clearHistory()`, and `chat.addToolApprovalResponse(...)` from event handlers.
+Read `chat.messages`, `chat.status`, `chat.error`, `chat.isStreaming`, and `chat.isToolContinuation` directly in markup. Use `chat.sendMessage(...)`, `chat.stop()`, `chat.clearHistory()`, and `chat.addToolApprovalResponse(...)` from event handlers.
 
 By default, local stream cleanup does not cancel a running server turn, so the turn can resume after reconnect. Call `chat.stop()` to cancel the server turn, or pass `cancelOnClientAbort: true` to restore cancellation on client cleanup.
 
@@ -298,6 +299,8 @@ By default, `AgentChat` loads `/get-messages` from the Agent route. Use these op
 - `initialMessages` seeds the client before a fetch completes.
 - `getInitialMessages: null` disables the default fetch.
 - `getInitialMessages: async (...) => messages` supplies a custom loader.
+
+If messages are sent before the initial load resolves, missing fetched history is prepended without replacing the optimistic messages. A socket-pushed message snapshot still wins over a slower initial load.
 
 #### Client tool schemas
 
