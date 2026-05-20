@@ -18,6 +18,8 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.3.0]
+
 ### Added
 
 - Added `agent.ready`, `onIdentity`, `onIdentityChange`, and RPC `{ timeout, stream }` options to the Agent controller.
@@ -63,6 +65,7 @@ Initial release! 🎉
 - Added README documentation.
 - Added initial unit, type, and browser E2E tests.
 
-[Unreleased]: https://github.com/joshuadavidthomas/agents-svelte/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/joshuadavidthomas/agents-svelte/compare/v0.3.0...HEAD
 [0.1.0]: https://github.com/joshuadavidthomas/agents-svelte/releases/tag/v0.1.0
 [0.2.0]: https://github.com/joshuadavidthomas/agents-svelte/releases/tag/v0.2.0
+[0.3.0]: https://github.com/joshuadavidthomas/agents-svelte/releases/tag/v0.3.0
