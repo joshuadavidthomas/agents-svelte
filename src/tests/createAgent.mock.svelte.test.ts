@@ -115,6 +115,7 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
       protocol: "ws",
     });
     const socket = latestSocket();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     dispatchMessage(socket, {
       type: MessageType.CF_AGENT_IDENTITY,
@@ -146,6 +147,42 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
       agent: "other-agent",
       identified: true,
     });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Identity changed on reconnect"));
+    warn.mockRestore();
+  });
+
+  it("calls onIdentityChange instead of warning when provided", () => {
+    const onIdentityChange = vi.fn();
+    makeAgent({
+      agent: "TestStateAgent",
+      host: "localhost:8787",
+      protocol: "ws",
+      onIdentityChange,
+    });
+    const socket = latestSocket();
+    expect(typeof socket.options.onIdentityChange).toBe("function");
+    expect(socket.options.onIdentityChange).not.toBe(onIdentityChange);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    dispatchMessage(socket, {
+      type: MessageType.CF_AGENT_IDENTITY,
+      name: "first-room",
+      agent: "test-state-agent",
+    });
+    dispatchMessage(socket, {
+      type: MessageType.CF_AGENT_IDENTITY,
+      name: "second-room",
+      agent: "other-agent",
+    });
+
+    expect(onIdentityChange).toHaveBeenCalledWith(
+      "first-room",
+      "second-room",
+      "test-state-agent",
+      "other-agent",
+    );
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("builds the HTTP URL without reading PartySocket private fields", () => {
@@ -227,6 +264,39 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     expect(agent.connected).toBe(false);
   });
 
+  it("exposes a ready promise that resolves on identity and resets on close", async () => {
+    const agent = makeAgent({
+      agent: "TestStateAgent",
+      host: "localhost:8787",
+      protocol: "ws",
+    });
+    const socket = latestSocket();
+    const firstReady = agent.ready;
+    const firstResolved = vi.fn();
+    firstReady.then(firstResolved);
+    await Promise.resolve();
+    expect(firstResolved).not.toHaveBeenCalled();
+
+    dispatchMessage(socket, {
+      type: MessageType.CF_AGENT_IDENTITY,
+      name: "room-1",
+      agent: "test-state-agent",
+    });
+    await expect(firstReady).resolves.toBeUndefined();
+    expect(firstResolved).toHaveBeenCalled();
+
+    socket.dispatchEvent(new CloseEvent("close"));
+    const secondReady = agent.ready;
+    expect(secondReady).not.toBe(firstReady);
+
+    dispatchMessage(socket, {
+      type: MessageType.CF_AGENT_IDENTITY,
+      name: "room-1",
+      agent: "test-state-agent",
+    });
+    await expect(secondReady).resolves.toBeUndefined();
+  });
+
   it("rejects pending RPCs when the connection closes", async () => {
     const agent = makeAgent({
       agent: "TestCallableAgent",
@@ -239,6 +309,31 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     socket.dispatchEvent(new CloseEvent("close"));
 
     await expect(pending).rejects.toThrow("Connection closed");
+  });
+
+  it("rejects RPC calls when their timeout expires", async () => {
+    vi.useFakeTimers();
+    try {
+      const agent = makeAgent({
+        agent: "TestCallableAgent",
+        host: "localhost:8787",
+        protocol: "ws",
+      });
+      const onError = vi.fn();
+
+      const pending = agent.call("slow", [], {
+        timeout: 25,
+        stream: { onError },
+      });
+
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(pending).rejects.toThrow("RPC call to slow timed out after 25ms");
+      expect(onError).toHaveBeenCalledWith("RPC call to slow timed out after 25ms");
+      expect(latestSocket().sent).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the socket reference across transient close events for PartySocket reconnects", async () => {

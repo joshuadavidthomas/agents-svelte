@@ -61,12 +61,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "agents": "^0.12.4",
+    "agents": "^0.13.0",
     "nanoid": "^5.1.9"
   },
   "devDependencies": {
     "@ai-sdk/svelte": "^4.0.0",
-    "@cloudflare/ai-chat": "^0.7.0",
+    "@cloudflare/ai-chat": "^0.7.1",
     "@cloudflare/voice": "^0.2.0",
     "@cloudflare/workers-types": "^4.20260418.1",
     "@playwright/test": "^1.59.1",
@@ -86,7 +86,7 @@
   },
   "peerDependencies": {
     "@ai-sdk/svelte": "^4.0.0",
-    "@cloudflare/ai-chat": ">=0.7.0 <1.0.0",
+    "@cloudflare/ai-chat": ">=0.7.1 <1.0.0",
     "@cloudflare/voice": ">=0.2.0 <1.0.0",
     "ai": "^6.0.0",
     "svelte": "^5.0.0"

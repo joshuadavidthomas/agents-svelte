@@ -157,6 +157,16 @@ export interface CreateAgentChatOptions<M extends UIMessage = UIMessage> extends
   cancelOnClientAbort?: boolean;
 }
 
+function prependMissingHydratedMessages<M extends UIMessage>(hydrated: M[], current: M[]): M[] {
+  if (current.length === 0) {
+    return hydrated;
+  }
+
+  const currentIds = new Set(current.map((message) => message.id));
+  const missing = hydrated.filter((message) => !currentIds.has(message.id));
+  return missing.length > 0 ? [...missing, ...current] : current;
+}
+
 export async function getAgentMessages<M extends UIMessage = UIMessage>(
   options:
     | {
@@ -206,9 +216,15 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   initialLoadError = $state<Error | null>(null);
 
   isServerStreaming = $state(false);
+  isToolContinuation = $state(false);
 
   get isStreaming(): boolean {
-    return this.status === "streaming" || this.isServerStreaming;
+    return (
+      this.status === "streaming" ||
+      this.isServerStreaming ||
+      this.isToolContinuation ||
+      this.#pendingToolCalls.some((toolCall) => !toolCall.handled)
+    );
   }
 
   readonly #transport: AgentChatTransport<M>;
@@ -236,6 +252,9 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   #clientContinuationRequested = false;
   #cleanupPendingToolCallsEffect: (() => void) | null = null;
   #initialLoadStarted = false;
+  #historyClearSeq = 0;
+  #serverSnapshotSeq = 0;
+  #toolContinuationGeneration = 0;
   #attachedSocket: unknown = null;
   #resumedSocket: unknown = null;
   readonly #streamState: { current: BroadcastStreamState } = {
@@ -362,6 +381,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       });
 
       $effect(() => {
+        this.#transport.setCancelOnClientAbort(this.#options.cancelOnClientAbort ?? false);
+      });
+
+      $effect(() => {
         const socket = this.#options.agent.socket;
         const socketChanged = socket !== this.#attachedSocket;
         this.#attachedSocket = socket;
@@ -416,6 +439,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
 
     this.#initialLoadStarted = true;
+    const historyClearSeq = this.#historyClearSeq;
+    const serverSnapshotSeq = this.#serverSnapshotSeq;
     const {
       agent,
       getInitialMessages,
@@ -453,7 +478,13 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     initialPromise
       .then((msgs) => {
         if (this.#closed) return;
-        if (msgs.length > 0 && this.messages.length === 0) this.messages = msgs;
+        if (
+          msgs.length > 0 &&
+          historyClearSeq === this.#historyClearSeq &&
+          serverSnapshotSeq === this.#serverSnapshotSeq
+        ) {
+          this.messages = prependMissingHydratedMessages(msgs, this.messages);
+        }
         this.initialLoadError = null;
         this.initialized = true;
         if (resume) {
@@ -518,6 +549,9 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     const resolved = typeof next === "function" ? next(this.messages) : next;
     const messages = this.#preserveProtectedStreamingAssistant(resolved);
     this.messages = messages;
+    if (messages.length === 0) {
+      this.#historyClearSeq++;
+    }
     if (options?.skipServerSync) return;
     this.#transport.sendMessagesSnapshot(messages);
   }
@@ -528,6 +562,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
 
     this.messages = [];
+    this.#historyClearSeq++;
     this.#resetLocalTransientState();
     this.#resetStreamState();
     this.#transport.clearHistory();
@@ -567,9 +602,17 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       return;
     }
 
+    const generation = ++this.#toolContinuationGeneration;
+    this.isToolContinuation = true;
     this.#protectCurrentAssistantTail();
     this.#transport.prepareToolContinuation();
-    void this.resumeStream().catch(() => {});
+    void this.resumeStream()
+      .catch(() => {})
+      .finally(() => {
+        if (generation === this.#toolContinuationGeneration) {
+          this.isToolContinuation = false;
+        }
+      });
   }
 
   #resetStreamState(): void {
@@ -577,6 +620,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#continuationStreamsSeeded.clear();
     this.#observedBroadcastResumes.clear();
     this.isServerStreaming = false;
+    this.isToolContinuation = false;
+    this.#toolContinuationGeneration++;
   }
 
   #continueFromClientWhenConfigured(): Promise<void> {
@@ -951,7 +996,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         isToolUIPart(part) && part.state === "approval-requested" && part.approval.id === opts.id
           ? {
               ...part,
-              state: "approval-responded",
+              state: opts.approved ? "approval-responded" : "output-denied",
               approval: {
                 id: opts.id,
                 approved: opts.approved,
@@ -1071,15 +1116,20 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
     switch (event.type) {
       case "history-cleared":
+        this.#historyClearSeq++;
+        this.#serverSnapshotSeq++;
         this.#resetLocalTransientState();
         this.#streamState.current = broadcastTransition(this.#streamState.current, {
           type: "clear",
         }).state;
         this.isServerStreaming = false;
+        this.isToolContinuation = false;
+        this.#toolContinuationGeneration++;
         this.messages = [];
         break;
 
       case "messages-replaced":
+        this.#serverSnapshotSeq++;
         this.messages = this.#preserveProtectedStreamingAssistant(event.messages);
         this.#collapseHydratedReplayTextParts();
         break;
