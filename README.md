@@ -20,14 +20,16 @@ npm install agents-svelte
 For chat:
 
 ```bash
-npm install @ai-sdk/svelte @cloudflare/ai-chat
+npm install @ai-sdk/svelte @cloudflare/ai-chat@^0.8.0
 ```
 
 For voice:
 
 ```bash
-npm install @cloudflare/voice
+npm install @cloudflare/voice@^0.2.1
 ```
+
+This version expects `agents@^0.14.0`, `@cloudflare/ai-chat@>=0.8.0`, and `@cloudflare/voice@>=0.2.1`.
 
 Use this package from a Svelte 5 app built with Vite or another toolchain that supports `.svelte.ts` files.
 
@@ -46,7 +48,7 @@ This example assumes your Svelte app and Agent Worker share the same host and `/
   const chat = createAgentChat({ agent });
 
   let input = $state("");
-  let canSend = $derived(input.trim().length > 0 && !chat.isStreaming);
+  let canSend = $derived(input.trim().length > 0 && !chat.isBusy);
 
   function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
@@ -269,7 +271,7 @@ For async query functions, `Agent` waits for the query to resolve before opening
 </script>
 ```
 
-Read `chat.messages`, `chat.status`, `chat.error`, `chat.isStreaming`, and `chat.isToolContinuation` directly in markup. Use `chat.sendMessage(...)`, `chat.stop()`, `chat.clearHistory()`, and `chat.addToolApprovalResponse(...)` from event handlers.
+Read `chat.messages`, `chat.status`, `chat.error`, `chat.activity`, and `chat.isBusy` directly in markup. `chat.activity` is the primary Svelte state for rendering chat UI and can be `idle`, `submitted`, `streaming`, `recovering`, `tool-continuation`, or `awaiting-tools`. `chat.isBusy` is true whenever sending should usually be disabled. `chat.isStreaming` stays stream-focused and does not include recovery; use `chat.isBusy` or `chat.activity.kind === "recovering"` when recovery should block UI. Convenience getters like `chat.isRecovering` and `chat.isToolContinuation` remain available for focused checks. Use `chat.sendMessage(...)`, `chat.stop()`, `chat.clearHistory()`, and `chat.addToolApprovalResponse(...)` from event handlers.
 
 By default, local stream cleanup does not cancel a running server turn, so the turn can resume after reconnect. Call `chat.stop()` to cancel the server turn, or pass `cancelOnClientAbort: true` to restore cancellation on client cleanup.
 
@@ -342,7 +344,7 @@ On the server, use `createToolsFromClientSchemas(options.clientTools)` to expose
 
 Read `voice.status`, `voice.transcript`, `voice.interimTranscript`, `voice.audioLevel`, and `voice.isMuted` in markup. Use `voice.startCall()`, `voice.endCall()`, `voice.toggleMute()`, and `voice.sendText(text)` from event handlers.
 
-Pass `enabled: false` to delay connecting, then call `voice.setEnabled(true)` when the voice transport should start.
+Pass `enabled: false` to delay creating and connecting the voice client, then call `voice.setEnabled(true)` when the voice transport should start.
 
 ### Voice input
 

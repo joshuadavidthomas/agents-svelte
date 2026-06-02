@@ -2105,12 +2105,28 @@ describe("createAgentChat — stream chunk repair", () => {
   });
 });
 
-describe("createAgentChat — isStreaming flag", () => {
-  it("isStreaming reflects chat.status OR server stream", async () => {
+describe("createAgentChat — activity state", () => {
+  it("marks the submitted window busy before streaming starts", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    void chat.sendMessage({ text: "hello" }).catch(() => {});
+
+    await vi.waitFor(() => {
+      expect(chat.activity).toEqual({ kind: "submitted" });
+    });
+    expect(chat.isBusy).toBe(true);
+    expect(chat.isStreaming).toBe(false);
+  });
+
+  it("activity and isStreaming reflect chat.status OR server stream", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, { resume: true });
     await waitForChatInitialized(chat);
 
+    expect(chat.activity).toEqual({ kind: "idle" });
+    expect(chat.isBusy).toBe(false);
     expect(chat.isStreaming).toBe(false);
 
     mock.dispatchServerMessage({
@@ -2125,7 +2141,109 @@ describe("createAgentChat — isStreaming flag", () => {
     flushSync();
 
     expect(chat.isServerStreaming).toBe(true);
+    expect(chat.activity).toEqual({ kind: "streaming", source: "server", streamIds: ["stream-1"] });
+    expect(chat.isBusy).toBe(true);
     expect(chat.isStreaming).toBe(true);
+  });
+
+  it("keeps recovery busy but separate from streaming", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_RECOVERING,
+      recovering: true,
+      id: "recover-1",
+    });
+    flushSync();
+
+    expect(chat.isRecovering).toBe(true);
+    expect(chat.activity).toEqual({
+      kind: "recovering",
+      streamIds: ["recover-1"],
+      unidentified: false,
+    });
+    expect(chat.isBusy).toBe(true);
+    expect(chat.isStreaming).toBe(false);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_RECOVERING,
+      recovering: false,
+    });
+    flushSync();
+
+    expect(chat.isRecovering).toBe(false);
+    expect(chat.activity).toEqual({ kind: "idle" });
+    expect(chat.isBusy).toBe(false);
+    expect(chat.isStreaming).toBe(false);
+  });
+
+  it("clears recovery state on terminal stream frames and history resets", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_RECOVERING,
+      recovering: true,
+      id: "recover-done",
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "recover-done",
+      body: "",
+      done: true,
+    });
+    flushSync();
+
+    expect(chat.isRecovering).toBe(false);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_RECOVERING,
+      recovering: true,
+    });
+    flushSync();
+    expect(chat.isRecovering).toBe(true);
+
+    chat.clearHistory();
+    flushSync();
+
+    expect(chat.isRecovering).toBe(false);
+    expect(chat.isStreaming).toBe(false);
+  });
+
+  it("keeps identified recovery active when an unrelated stream finishes", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_RECOVERING,
+      recovering: true,
+      id: "recover-a",
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "other-stream",
+      body: "",
+      done: true,
+    });
+    flushSync();
+
+    expect(chat.isRecovering).toBe(true);
+    expect(chat.isBusy).toBe(true);
+    expect(chat.isStreaming).toBe(false);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_RECOVERING,
+      recovering: false,
+      id: "recover-a",
+    });
+    flushSync();
+
+    expect(chat.isRecovering).toBe(false);
+    expect(chat.isStreaming).toBe(false);
   });
 
   it("isStreaming covers pending client tools and tool continuations", async () => {
@@ -2136,12 +2254,15 @@ describe("createAgentChat — isStreaming flag", () => {
     await waitForChatInitialized(chat);
 
     expect(chat.pendingToolCalls).toHaveLength(1);
+    expect(chat.activity).toMatchObject({ kind: "awaiting-tools" });
+    expect(chat.isBusy).toBe(true);
     expect(chat.isStreaming).toBe(true);
 
     chat.pendingToolCalls[0]!.addOutput({ output: { weather: "sunny" } });
     flushSync();
 
     expect(chat.isToolContinuation).toBe(true);
+    expect(chat.activity).toEqual({ kind: "tool-continuation" });
     expect(chat.isStreaming).toBe(true);
 
     mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });

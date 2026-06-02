@@ -1,6 +1,7 @@
 export { AgentChat, AgentChatToolCall, createAgentChat, getAgentMessages } from "./chat.svelte.ts";
 export { AgentToolEvents, createAgentToolEvents } from "./tool-events.svelte.ts";
 export type {
+  AgentChatActivity,
   CreateAgentChatOptions,
   ToolCallOutputOptions,
   PrepareSendMessagesRequestOptions,

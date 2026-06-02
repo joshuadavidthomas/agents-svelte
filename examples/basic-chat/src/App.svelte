@@ -15,7 +15,7 @@
 
   $effect(() => {
     void chat.messages.length;
-    void chat.isStreaming;
+    void chat.activity.kind;
 
     tick().then(() => {
       if (!scrollContainer) return;
@@ -35,7 +35,32 @@
     }),
   );
   const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
-  const status = $derived(chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle");
+  const status = $derived(activityLabel(chat.activity.kind));
+  const canStop = $derived(
+    chat.activity.kind === "submitted" ||
+      chat.activity.kind === "streaming" ||
+      chat.activity.kind === "tool-continuation",
+  );
+  const showStreamingCursor = $derived(
+    chat.activity.kind === "streaming" || chat.activity.kind === "tool-continuation",
+  );
+
+  function activityLabel(kind: string): string {
+    switch (kind) {
+      case "submitted":
+        return "Thinking";
+      case "streaming":
+        return "Streaming";
+      case "recovering":
+        return "Recovering";
+      case "tool-continuation":
+        return "Continuing";
+      case "awaiting-tools":
+        return "Waiting for tools";
+      default:
+        return "Idle";
+    }
+  }
 
   function textFromPart(part: MessagePart): string {
     return part.type === "text" ? (part.text ?? "") : "";
@@ -47,7 +72,7 @@
 
   function send() {
     const text = input.trim();
-    if (!text || chat.isStreaming) return;
+    if (!text || chat.isBusy) return;
 
     chat.sendMessage({ text });
     input = "";
@@ -76,7 +101,7 @@
   connected={agent.connected}
   connectionText={agent.connected ? "Connected" : "Connecting"}
   actionLabel="New"
-  actionDisabled={chat.messages.length === 0 || chat.isStreaming}
+  actionDisabled={chat.messages.length === 0 || chat.isBusy}
   onAction={startNewChat}
 >
   {#snippet subbar()}
@@ -127,7 +152,7 @@
               {/each}
               {#if cancelledMessageIds.has(message.id)}
                 <div class="cancelled-note">Response stopped.</div>
-              {:else if chat.isStreaming && message === chat.messages.at(-1) && message.role === "assistant"}
+              {:else if showStreamingCursor && message === chat.messages.at(-1) && message.role === "assistant"}
                 <span class="cursor"></span>
               {/if}
             </div>
@@ -164,7 +189,7 @@
         }}
       ></textarea>
 
-      {#if chat.isStreaming}
+      {#if canStop}
         <button class="secondary" type="button" onclick={stop}>Stop</button>
       {:else}
         <button disabled={!agent.connected || !input.trim()}>Send</button>

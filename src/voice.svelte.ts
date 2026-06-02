@@ -43,38 +43,36 @@ export interface VoiceAgentOptions extends VoiceClientOptions {
 }
 
 export class VoiceAgent {
-  readonly #client: VoiceClient;
-  readonly #statusChanged: () => void;
-  readonly #transcriptChanged: () => void;
-  readonly #interimTranscriptChanged: () => void;
-  readonly #metricsChanged: () => void;
-  readonly #audioLevelChanged: () => void;
-  readonly #muteChanged: () => void;
-  readonly #connectionChanged: () => void;
-  readonly #errorChanged: () => void;
-  readonly #customMessageChanged: () => void;
+  readonly #clientOptions: VoiceClientOptions;
+  #client: VoiceClient | null = null;
   #connectStarted = false;
   #enabled = true;
+
+  #status = $state<VoiceStatus>("idle");
+  #transcript = $state<TranscriptMessage[]>([]);
+  #interimTranscript = $state<string | null>(null);
+  #metrics = $state<VoicePipelineMetrics | null>(null);
+  #audioLevel = $state(0);
+  #isMuted = $state(false);
+  #connected = $state(false);
+  #error = $state<string | null>(null);
+  #lastCustomMessage = $state<unknown>(null);
 
   constructor(options: VoiceAgentOptions) {
     const { enabled = true, ...clientOptions } = options;
     this.#enabled = enabled;
-    this.#client = new VoiceClient(clientOptions);
-    this.#statusChanged = subscribeToVoiceEvent(this.#client, "statuschange");
-    this.#transcriptChanged = subscribeToVoiceEvent(this.#client, "transcriptchange");
-    this.#interimTranscriptChanged = subscribeToVoiceEvent(this.#client, "interimtranscript");
-    this.#metricsChanged = subscribeToVoiceEvent(this.#client, "metricschange");
-    this.#audioLevelChanged = subscribeToVoiceEvent(this.#client, "audiolevelchange");
-    this.#muteChanged = subscribeToVoiceEvent(this.#client, "mutechange");
-    this.#connectionChanged = subscribeToVoiceEvent(this.#client, "connectionchange");
-    this.#errorChanged = subscribeToVoiceEvent(this.#client, "error");
-    this.#customMessageChanged = subscribeToVoiceEvent(this.#client, "custommessage");
+    this.#clientOptions = clientOptions;
   }
 
   connect(): void {
     if (!this.#enabled || this.#connectStarted) return;
     this.#connectStarted = true;
-    this.#client.connect();
+    try {
+      this.#createClient().connect();
+    } catch (error) {
+      this.#disposeClient();
+      throw error;
+    }
   }
 
   setEnabled(enabled: boolean): void {
@@ -84,66 +82,147 @@ export class VoiceAgent {
       this.connect();
       return;
     }
-    this.close();
+    this.#disposeClient();
   }
 
   get status(): VoiceStatus {
-    this.#statusChanged();
-    return this.#client.status;
+    return this.#status;
   }
   get transcript(): TranscriptMessage[] {
-    this.#transcriptChanged();
-    return this.#client.transcript;
+    return this.#transcript;
   }
   get interimTranscript(): string | null {
-    this.#interimTranscriptChanged();
-    return this.#client.interimTranscript;
+    return this.#interimTranscript;
   }
   get metrics(): VoicePipelineMetrics | null {
-    this.#metricsChanged();
-    return this.#client.metrics;
+    return this.#metrics;
   }
   get audioLevel(): number {
-    this.#audioLevelChanged();
-    return this.#client.audioLevel;
+    return this.#audioLevel;
   }
   get isMuted(): boolean {
-    this.#muteChanged();
-    return this.#client.isMuted;
+    return this.#isMuted;
   }
   get connected(): boolean {
-    this.#connectionChanged();
-    return this.#client.connected;
+    return this.#connected;
   }
   get error(): string | null {
-    this.#errorChanged();
-    return this.#client.error;
+    return this.#error;
   }
   get lastCustomMessage(): unknown {
-    this.#customMessageChanged();
-    return this.#client.lastCustomMessage;
+    return this.#lastCustomMessage;
   }
 
   startCall(): Promise<void> {
-    return this.#client.startCall();
+    return this.#client?.startCall() ?? Promise.resolve();
   }
   endCall(): void {
-    this.#client.endCall();
+    this.#client?.endCall();
   }
   toggleMute(): void {
-    this.#client.toggleMute();
+    this.#client?.toggleMute();
   }
   sendText(text: string): void {
-    this.#client.sendText(text);
+    this.#client?.sendText(text);
   }
   sendJSON(data: Record<string, unknown>): void {
-    this.#client.sendJSON(data);
+    this.#client?.sendJSON(data);
   }
 
   close(): void {
-    this.#connectStarted = false;
-    this.#client.disconnect();
+    this.#disposeClient();
   }
+
+  #createClient(): VoiceClient {
+    if (this.#client) {
+      return this.#client;
+    }
+
+    const client = new VoiceClient(this.#clientOptions);
+    client.addEventListener("statuschange", this.#syncStatus);
+    client.addEventListener("transcriptchange", this.#syncTranscript);
+    client.addEventListener("interimtranscript", this.#syncInterimTranscript);
+    client.addEventListener("metricschange", this.#syncMetrics);
+    client.addEventListener("audiolevelchange", this.#syncAudioLevel);
+    client.addEventListener("mutechange", this.#syncMute);
+    client.addEventListener("connectionchange", this.#syncConnection);
+    client.addEventListener("error", this.#syncError);
+    client.addEventListener("custommessage", this.#syncCustomMessage);
+    this.#client = client;
+    this.#syncAll();
+    return client;
+  }
+
+  #disposeClient(): void {
+    const client = this.#client;
+    this.#connectStarted = false;
+    this.#client = null;
+    if (client) {
+      client.removeEventListener("statuschange", this.#syncStatus);
+      client.removeEventListener("transcriptchange", this.#syncTranscript);
+      client.removeEventListener("interimtranscript", this.#syncInterimTranscript);
+      client.removeEventListener("metricschange", this.#syncMetrics);
+      client.removeEventListener("audiolevelchange", this.#syncAudioLevel);
+      client.removeEventListener("mutechange", this.#syncMute);
+      client.removeEventListener("connectionchange", this.#syncConnection);
+      client.removeEventListener("error", this.#syncError);
+      client.removeEventListener("custommessage", this.#syncCustomMessage);
+      client.disconnect();
+    }
+    this.#resetState();
+  }
+
+  #syncAll(): void {
+    this.#syncStatus();
+    this.#syncTranscript();
+    this.#syncInterimTranscript();
+    this.#syncMetrics();
+    this.#syncAudioLevel();
+    this.#syncMute();
+    this.#syncConnection();
+    this.#syncError();
+    this.#syncCustomMessage();
+  }
+
+  #resetState(): void {
+    this.#status = "idle";
+    this.#transcript = [];
+    this.#interimTranscript = null;
+    this.#metrics = null;
+    this.#audioLevel = 0;
+    this.#isMuted = false;
+    this.#connected = false;
+    this.#error = null;
+    this.#lastCustomMessage = null;
+  }
+
+  #syncStatus = (): void => {
+    this.#status = this.#client?.status ?? "idle";
+  };
+  #syncTranscript = (): void => {
+    this.#transcript = this.#client?.transcript ?? [];
+  };
+  #syncInterimTranscript = (): void => {
+    this.#interimTranscript = this.#client?.interimTranscript ?? null;
+  };
+  #syncMetrics = (): void => {
+    this.#metrics = this.#client?.metrics ?? null;
+  };
+  #syncAudioLevel = (): void => {
+    this.#audioLevel = this.#client?.audioLevel ?? 0;
+  };
+  #syncMute = (): void => {
+    this.#isMuted = this.#client?.isMuted ?? false;
+  };
+  #syncConnection = (): void => {
+    this.#connected = this.#client?.connected ?? false;
+  };
+  #syncError = (): void => {
+    this.#error = this.#client?.error ?? null;
+  };
+  #syncCustomMessage = (): void => {
+    this.#lastCustomMessage = this.#client?.lastCustomMessage ?? null;
+  };
 }
 
 export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {

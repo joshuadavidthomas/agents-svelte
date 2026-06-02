@@ -75,8 +75,25 @@
       outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
     }),
   );
-  const status = $derived(chat?.status === "submitted" ? "Thinking" : chat?.isStreaming ? "Streaming" : "Idle");
+  const status = $derived(activityLabel(chat?.activity.kind));
   const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
+
+  function activityLabel(kind: string | undefined): string {
+    switch (kind) {
+      case "submitted":
+        return "Thinking";
+      case "streaming":
+        return "Streaming";
+      case "recovering":
+        return "Recovering";
+      case "tool-continuation":
+        return "Continuing";
+      case "awaiting-tools":
+        return "Waiting for tools";
+      default:
+        return "Idle";
+    }
+  }
 
   $effect(() => {
     const activeExists = activeId ? chats.some((chat) => chat.id === activeId) : false;
@@ -105,7 +122,7 @@
 
   $effect(() => {
     void chat?.messages.length;
-    void chat?.isStreaming;
+    void chat?.activity.kind;
     requestAnimationFrame(() => scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight }));
   });
 
@@ -167,7 +184,7 @@
 
   function send() {
     const text = input.trim();
-    if (!text || !chat || chat.isStreaming) return;
+    if (!text || !chat || chat.isBusy) return;
     chat.sendMessage({ text });
     input = "";
   }
@@ -380,7 +397,7 @@
               }
             }}
           ></textarea>
-          <button disabled={!input.trim() || chat.isStreaming} type="submit">Send</button>
+          <button disabled={!input.trim() || chat.isBusy} type="submit">Send</button>
         </form>
       {/if}
     </section>

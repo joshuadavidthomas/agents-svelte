@@ -24,6 +24,7 @@ export type AgentChatTransportEvent<ChatMessage extends UIMessage = UIMessage> =
   | { type: "history-cleared" }
   | { type: "messages-replaced"; messages: ChatMessage[] }
   | { type: "message-updated"; message: ChatMessage }
+  | { type: "chat-recovering"; recovering: boolean; id?: string }
   | { type: "broadcast-resume"; streamId: string }
   | { type: "replay-hydrated-reset"; messageId: string }
   | {
@@ -526,6 +527,14 @@ export class AgentChatTransport<
         this.#onEvent?.({
           type: "message-updated",
           message: data.message as ChatMessage,
+        });
+        break;
+
+      case MessageType.CF_AGENT_CHAT_RECOVERING:
+        this.#onEvent?.({
+          type: "chat-recovering",
+          recovering: data.recovering,
+          ...(data.id ? { id: data.id } : {}),
         });
         break;
 

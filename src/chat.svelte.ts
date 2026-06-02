@@ -118,6 +118,14 @@ export type PrepareSendMessagesRequestResult = {
   body?: Record<string, unknown>;
 };
 
+export type AgentChatActivity =
+  | { kind: "idle" }
+  | { kind: "submitted" }
+  | { kind: "streaming"; source: "client" | "server"; streamIds: readonly string[] }
+  | { kind: "recovering"; streamIds: readonly string[]; unidentified: boolean }
+  | { kind: "tool-continuation" }
+  | { kind: "awaiting-tools"; toolCalls: readonly AgentChatToolCall[] };
+
 export interface CreateAgentChatOptions<M extends UIMessage = UIMessage> extends Omit<
   ChatInit<M>,
   "transport" | "onToolCall" | "id" | "messages"
@@ -215,8 +223,50 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   initialized = $state(false);
   initialLoadError = $state<Error | null>(null);
 
-  isServerStreaming = $state(false);
-  isToolContinuation = $state(false);
+  get activity(): AgentChatActivity {
+    const pendingToolCalls = this.#pendingToolCalls.filter((toolCall) => !toolCall.handled);
+
+    if (this.status === "submitted") {
+      return { kind: "submitted" };
+    }
+    if (this.isToolContinuation) {
+      return { kind: "tool-continuation" };
+    }
+    if (this.status === "streaming") {
+      return { kind: "streaming", source: "client", streamIds: [] };
+    }
+    if (this.isServerStreaming) {
+      return { kind: "streaming", source: "server", streamIds: [...this.#serverStreamIds] };
+    }
+    if (this.isRecovering) {
+      return {
+        kind: "recovering",
+        streamIds: [...this.#recoveringStreamIds],
+        unidentified: this.#hasUnidentifiedRecovery,
+      };
+    }
+    if (pendingToolCalls.length > 0) {
+      return { kind: "awaiting-tools", toolCalls: pendingToolCalls };
+    }
+
+    return { kind: "idle" };
+  }
+
+  get isBusy(): boolean {
+    return this.activity.kind !== "idle";
+  }
+
+  get isServerStreaming(): boolean {
+    return this.#serverStreamIds.length > 0;
+  }
+
+  get isRecovering(): boolean {
+    return this.#hasUnidentifiedRecovery || this.#recoveringStreamIds.length > 0;
+  }
+
+  get isToolContinuation(): boolean {
+    return this.#toolContinuationIds.length > 0;
+  }
 
   get isStreaming(): boolean {
     return (
@@ -247,7 +297,11 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   #closed = false;
   readonly #continuationStreamsSeeded = new Set<string>();
   readonly #observedBroadcastResumes = new Set<string>();
+  #serverStreamIds = $state<string[]>([]);
+  #recoveringStreamIds = $state<string[]>([]);
+  #toolContinuationIds = $state<number[]>([]);
   readonly #replayHydratedAssistantIds = new Set<string>();
+  #hasUnidentifiedRecovery = $state(false);
   #clientContinuationPromise: Promise<void> | null = null;
   #clientContinuationRequested = false;
   #cleanupPendingToolCallsEffect: (() => void) | null = null;
@@ -593,6 +647,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#toolCalls.clear();
     this.#pendingToolCalls = [];
     this.#protectedStreamingAssistant = null;
+    this.#resetRecoveryState();
     this.#observedBroadcastResumes.clear();
     this.#replayHydratedAssistantIds.clear();
   }
@@ -603,15 +658,13 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     }
 
     const generation = ++this.#toolContinuationGeneration;
-    this.isToolContinuation = true;
+    this.#addToolContinuation(generation);
     this.#protectCurrentAssistantTail();
     this.#transport.prepareToolContinuation();
     void this.resumeStream()
       .catch(() => {})
       .finally(() => {
-        if (generation === this.#toolContinuationGeneration) {
-          this.isToolContinuation = false;
-        }
+        this.#removeToolContinuation(generation);
       });
   }
 
@@ -619,9 +672,68 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#streamState.current = { status: "idle" } as BroadcastStreamState;
     this.#continuationStreamsSeeded.clear();
     this.#observedBroadcastResumes.clear();
-    this.isServerStreaming = false;
-    this.isToolContinuation = false;
+    this.#serverStreamIds = [];
+    this.#resetRecoveryState();
+    this.#toolContinuationIds = [];
     this.#toolContinuationGeneration++;
+  }
+
+  #resetRecoveryState(): void {
+    this.#recoveringStreamIds = [];
+    this.#hasUnidentifiedRecovery = false;
+  }
+
+  #addServerStream(streamId: string): void {
+    if (!this.#serverStreamIds.includes(streamId)) {
+      this.#serverStreamIds.push(streamId);
+    }
+  }
+
+  #removeServerStream(streamId: string): void {
+    const index = this.#serverStreamIds.indexOf(streamId);
+    if (index >= 0) {
+      this.#serverStreamIds.splice(index, 1);
+    }
+  }
+
+  #addToolContinuation(generation: number): void {
+    if (!this.#toolContinuationIds.includes(generation)) {
+      this.#toolContinuationIds.push(generation);
+    }
+  }
+
+  #removeToolContinuation(generation: number): void {
+    const index = this.#toolContinuationIds.indexOf(generation);
+    if (index >= 0) {
+      this.#toolContinuationIds.splice(index, 1);
+    }
+  }
+
+  #applyRecoveryHint(
+    event: Extract<AgentChatTransportEvent<M>, { type: "chat-recovering" }>,
+  ): void {
+    if (event.recovering) {
+      if (event.id && !this.#recoveringStreamIds.includes(event.id)) {
+        this.#recoveringStreamIds.push(event.id);
+      } else if (!event.id) {
+        this.#hasUnidentifiedRecovery = true;
+      }
+    } else if (event.id) {
+      this.#clearRecoveryForTerminalStream(event.id);
+    } else {
+      this.#resetRecoveryState();
+    }
+  }
+
+  #clearRecoveryForTerminalStream(streamId: string): void {
+    const index = this.#recoveringStreamIds.indexOf(streamId);
+    if (index >= 0) {
+      this.#recoveringStreamIds.splice(index, 1);
+      return;
+    }
+    if (this.#hasUnidentifiedRecovery) {
+      this.#hasUnidentifiedRecovery = false;
+    }
   }
 
   #continueFromClientWhenConfigured(): Promise<void> {
@@ -1122,14 +1234,16 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         this.#streamState.current = broadcastTransition(this.#streamState.current, {
           type: "clear",
         }).state;
-        this.isServerStreaming = false;
-        this.isToolContinuation = false;
+        this.#serverStreamIds = [];
+        this.#resetRecoveryState();
+        this.#toolContinuationIds = [];
         this.#toolContinuationGeneration++;
         this.messages = [];
         break;
 
       case "messages-replaced":
         this.#serverSnapshotSeq++;
+        this.#resetRecoveryState();
         this.messages = this.#preserveProtectedStreamingAssistant(event.messages);
         this.#collapseHydratedReplayTextParts();
         break;
@@ -1165,6 +1279,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         break;
       }
 
+      case "chat-recovering":
+        this.#applyRecoveryHint(event);
+        break;
+
       case "broadcast-resume":
         this.#observedBroadcastResumes.add(event.streamId);
         this.#streamState.current = broadcastTransition(this.#streamState.current, {
@@ -1172,7 +1290,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           streamId: event.streamId,
           messageId: nanoid(),
         }).state;
-        this.isServerStreaming = true;
+        this.#addServerStream(event.streamId);
         break;
 
       case "broadcast-response": {
@@ -1210,7 +1328,14 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
           this.messages = updater(this.messages);
           this.#collapseHydratedReplayTextParts();
         }
-        this.isServerStreaming = result.isStreaming;
+        if (result.isStreaming) {
+          this.#addServerStream(event.streamId);
+        } else {
+          this.#removeServerStream(event.streamId);
+        }
+        if (event.done || event.error) {
+          this.#clearRecoveryForTerminalStream(event.streamId);
+        }
         if (event.done || event.replayComplete || event.error) {
           this.#continuationStreamsSeeded.delete(event.streamId);
           this.#observedBroadcastResumes.delete(event.streamId);
