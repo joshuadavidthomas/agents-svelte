@@ -8,7 +8,7 @@ Minimal Svelte chat app using `createAgent(...)`, `createAgentChat(...)`, and a 
 - Sending messages with `chat.sendMessage(...)`
 - Streaming assistant responses
 - Rendering `chat.messages`
-- Using `chat.isStreaming` for button and input state
+- Using `chat.isBusy` for button and input state, including recovery after interrupted turns
 - Stopping an active response with `chat.stop()`
 - Clearing local and server history with `chat.clearHistory()`
 - Showing a simple token/cost estimate for the current chat

@@ -18,6 +18,23 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Added `chat.activity` and `chat.isBusy` as the primary Svelte chat activity API.
+- Added `chat.isRecovering` for Cloudflare Agents durable-turn recovery hints.
+
+### Changed
+
+- Updated Cloudflare Agents SDK package requirements to `agents@^0.14.0`, `@cloudflare/ai-chat@>=0.8.0`, and `@cloudflare/voice@>=0.2.1`.
+- Derived chat busy/streaming convenience getters from a single activity model instead of independent mutable flags; `chat.isStreaming` remains stream-focused and `chat.isBusy` covers broad "turn in progress" UI disabling, including recovery.
+- Updated examples to require the synced Cloudflare Agents package versions.
+- Delayed `VoiceAgent({ enabled: false })` client construction until the controller is enabled, matching upstream `enabled` behavior.
+
+### Fixed
+
+- Keep identified chat recovery active when an unrelated stream finishes.
+- Allow `VoiceAgent` to retry after a failed lazy connection attempt.
+
 ## [0.3.0]
 
 ### Added

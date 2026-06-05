@@ -28,10 +28,33 @@
   const formattedCost = $derived(
     usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`,
   );
-  const status = $derived(
-    chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle",
+  const status = $derived(activityLabel(chat.activity.kind));
+  const canStop = $derived(
+    chat.activity.kind === "submitted" ||
+      chat.activity.kind === "streaming" ||
+      chat.activity.kind === "tool-continuation",
   );
-  const scrollTrigger = $derived(`${chat.messages.length}:${chat.isStreaming}`);
+  const showStreamingCursor = $derived(
+    chat.activity.kind === "streaming" || chat.activity.kind === "tool-continuation",
+  );
+  const scrollTrigger = $derived(`${chat.messages.length}:${chat.activity.kind}`);
+
+  function activityLabel(kind: string): string {
+    switch (kind) {
+      case "submitted":
+        return "Thinking";
+      case "streaming":
+        return "Streaming";
+      case "recovering":
+        return "Recovering";
+      case "tool-continuation":
+        return "Continuing";
+      case "awaiting-tools":
+        return "Waiting for tools";
+      default:
+        return "Idle";
+    }
+  }
 
   const scrollContainers = new Set<HTMLElement>();
   function trackScroll(el: HTMLElement) {
@@ -54,7 +77,7 @@
 
   function send() {
     const text = input.trim();
-    if (!text || chat.isStreaming) return;
+    if (!text || chat.isBusy) return;
     chat.sendMessage({ text });
     input = "";
   }
@@ -112,7 +135,7 @@
           </div>
         </dl>
         <div>
-          {#if chat.isStreaming}
+          {#if canStop}
             <button
               type="button"
               class="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50"
@@ -124,7 +147,7 @@
           <button
             type="button"
             class="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50 disabled:pointer-events-none disabled:opacity-40"
-            disabled={chat.messages.length === 0 || chat.isStreaming}
+            disabled={chat.messages.length === 0 || chat.isBusy}
             onclick={clear}
           >
             Reset
@@ -155,7 +178,7 @@
                       </details>
                     {/if}
                   {/each}
-                  {#if chat.isStreaming && message === chat.messages.at(-1) && message.role === 'assistant'}
+                  {#if showStreamingCursor && message === chat.messages.at(-1) && message.role === 'assistant'}
                     <span class="ml-0.5 inline-block h-[1em] w-1.5 -translate-y-px animate-pulse bg-orange-500 align-middle"></span>
                   {/if}
                 </div>
@@ -181,13 +204,13 @@
             placeholder="Send a message…"
             aria-label="Message"
             rows="1"
-            disabled={chat.isStreaming}
+            disabled={chat.isBusy}
             onkeydown={onComposerKey}
             class="block max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2.5 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none disabled:opacity-50 max-sm:text-base [field-sizing:content]"
           ></textarea>
           <button
             type="submit"
-            disabled={!input.trim() || chat.isStreaming}
+            disabled={!input.trim() || chat.isBusy}
             aria-label="Send message"
             class="relative grid size-7 shrink-0 place-items-center self-end rounded-md bg-zinc-900 text-white hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:pointer-events-none disabled:bg-zinc-200 disabled:text-zinc-400"
           >

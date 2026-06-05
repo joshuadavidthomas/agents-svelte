@@ -39,17 +39,29 @@
     ),
   );
 
-  const awaitingResponse = $derived(chat.status === "submitted");
-
-  const status = $derived(
-    awaitingResponse
-      ? "Thinking"
-      : chat.isStreaming
-        ? "Streaming"
-        : pendingApproval
-          ? "Waiting for approval"
-          : "Idle",
+  const awaitingResponse = $derived(chat.activity.kind === "submitted");
+  const showStreamingCursor = $derived(
+    chat.activity.kind === "streaming" || chat.activity.kind === "tool-continuation",
   );
+
+  const status = $derived(activityLabel(chat.activity.kind, pendingApproval));
+
+  function activityLabel(kind: string, hasPendingApproval: boolean): string {
+    switch (kind) {
+      case "submitted":
+        return "Thinking";
+      case "streaming":
+        return "Streaming";
+      case "recovering":
+        return "Recovering";
+      case "tool-continuation":
+        return "Continuing";
+      case "awaiting-tools":
+        return "Waiting for tools";
+      default:
+        return hasPendingApproval ? "Waiting for approval" : "Idle";
+    }
+  }
 
   $effect(() => {
     for (const toolCall of chat.pendingToolCalls) {
@@ -61,7 +73,7 @@
 
   $effect(() => {
     void chat.messages.length;
-    void chat.isStreaming;
+    void chat.activity.kind;
     void awaitingResponse;
 
     tick().then(() => {
@@ -81,7 +93,7 @@
 
   function send() {
     const text = input.trim();
-    if (!text || chat.isStreaming || pendingApproval) return;
+    if (!text || chat.isBusy || pendingApproval) return;
 
     chat.sendMessage({ text });
     input = "";
@@ -156,7 +168,7 @@
   connected={agent.connected}
   connectionText={agent.connected ? "Connected" : "Connecting"}
   actionLabel="Clear"
-  actionDisabled={chat.messages.length === 0 || chat.isStreaming}
+  actionDisabled={chat.messages.length === 0 || chat.isBusy}
   onAction={startNewChat}
 >
   {#snippet subbar()}
@@ -215,7 +227,7 @@
                   </div>
                 {/if}
               {/each}
-              {#if chat.isStreaming && message === chat.messages.at(-1) && message.role === "assistant"}
+              {#if showStreamingCursor && message === chat.messages.at(-1) && message.role === "assistant"}
                 <span class="cursor"></span>
               {/if}
             </div>
@@ -254,7 +266,7 @@
         }}
       ></textarea>
 
-      <button disabled={!agent.connected || !input.trim() || chat.isStreaming || pendingApproval} type="submit">Send</button>
+      <button disabled={!agent.connected || !input.trim() || chat.isBusy || pendingApproval} type="submit">Send</button>
     </form>
   {/snippet}
 </ExampleChrome>

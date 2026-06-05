@@ -21,6 +21,7 @@ function createFakeTransport(): VoiceTransport & { connected: boolean } {
     sendBinary: (data) => transportSendBinary(data),
   };
   transportConnect.mockImplementation(() => {
+    transportInstance = transport;
     transport.connected = true;
     queueMicrotask(() => transport.onopen?.());
   });
@@ -28,7 +29,6 @@ function createFakeTransport(): VoiceTransport & { connected: boolean } {
     transport.connected = false;
     transport.onclose?.();
   });
-  transportInstance = transport;
   return transport;
 }
 
@@ -87,14 +87,17 @@ describe("VoiceAgent", () => {
     expect(v.isMuted).toBe(false);
   });
 
-  it("does not connect when disabled", () => {
+  it("does not create or connect a VoiceClient when disabled", async () => {
     const v = makeVoice({ enabled: false });
 
     expect(v.connected).toBe(false);
+    expect(transportInstance).toBeNull();
     expect(transportConnect).not.toHaveBeenCalled();
+    await expect(v.startCall()).resolves.toBeUndefined();
 
     v.setEnabled(true);
 
+    expect(transportInstance).not.toBeNull();
     expect(transportConnect).toHaveBeenCalledTimes(1);
   });
 
@@ -116,6 +119,23 @@ describe("VoiceAgent", () => {
     expect(transportDisconnect).toHaveBeenCalledTimes(1);
 
     v.connect();
+    expect(transportConnect).toHaveBeenCalledTimes(2);
+  });
+
+  it("can retry after a lazy connect failure", () => {
+    const transport = createFakeTransport();
+    const error = new Error("connect failed");
+    transportConnect.mockImplementationOnce(() => {
+      throw error;
+    });
+    const v = new VoiceAgent({ agent: "voice-agent", transport });
+    cleanups.push(() => v.close());
+
+    expect(() => v.connect()).toThrow(error);
+    expect(transportConnect).toHaveBeenCalledTimes(1);
+
+    v.connect();
+
     expect(transportConnect).toHaveBeenCalledTimes(2);
   });
 

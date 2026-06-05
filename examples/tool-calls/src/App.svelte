@@ -72,7 +72,27 @@
     }),
   );
   const formattedCost = $derived(usage.cost === 0 ? "$0.000000" : `$${usage.cost.toFixed(6)}`);
-  const status = $derived(chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle");
+  const status = $derived(activityLabel(chat.activity.kind));
+  const showStreamingCursor = $derived(
+    chat.activity.kind === "streaming" || chat.activity.kind === "tool-continuation",
+  );
+
+  function activityLabel(kind: string): string {
+    switch (kind) {
+      case "submitted":
+        return "Thinking";
+      case "streaming":
+        return "Streaming";
+      case "recovering":
+        return "Recovering";
+      case "tool-continuation":
+        return "Continuing";
+      case "awaiting-tools":
+        return "Waiting for tools";
+      default:
+        return "Idle";
+    }
+  }
 
   $effect(() => {
     for (const toolCall of chat.pendingToolCalls) {
@@ -88,7 +108,7 @@
 
   $effect(() => {
     void chat.messages.length;
-    void chat.isStreaming;
+    void chat.activity.kind;
     requestAnimationFrame(() => {
       scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight });
     });
@@ -103,7 +123,7 @@
 
   function send() {
     const text = input.trim();
-    if (!text || chat.isStreaming) return;
+    if (!text || chat.isBusy) return;
     chat.sendMessage({ text });
     input = "";
   }
@@ -161,6 +181,7 @@
   connected={agent.connected}
   connectionText={agent.connected ? "Connected" : "Connecting"}
   actionLabel="Clear"
+  actionDisabled={chat.messages.length === 0 || chat.isBusy}
   onAction={startNewChat}
   contentWidth="wide"
 >
@@ -247,7 +268,7 @@
                 {/if}
               {/each}
 
-              {#if chat.isStreaming && message === chat.messages.at(-1) && message.role === "assistant"}
+              {#if showStreamingCursor && message === chat.messages.at(-1) && message.role === "assistant"}
                 <span class="cursor"></span>
               {/if}
             </div>
@@ -258,7 +279,7 @@
       <form class="composer" onsubmit={(event) => { event.preventDefault(); send(); }}>
         <textarea
           bind:value={input}
-          disabled={!agent.connected || chat.isStreaming}
+          disabled={!agent.connected || chat.isBusy}
           placeholder={activeTools.length ? "Ask the agent to use a browser tool..." : "Enable a tool to try dynamic tool calls..."}
           rows="1"
           aria-label="Message"
@@ -270,7 +291,7 @@
             }
           }}
         ></textarea>
-        <button disabled={!input.trim() || !agent.connected || chat.isStreaming} type="submit">Send</button>
+        <button disabled={!input.trim() || !agent.connected || chat.isBusy} type="submit">Send</button>
 
       </form>
     </section>

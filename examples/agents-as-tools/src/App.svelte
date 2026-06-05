@@ -36,12 +36,31 @@
       outputCostPerMillion: MODEL_OUTPUT_COST_PER_MILLION,
     }),
   );
-  const status = $derived(chat.status === "submitted" ? "Thinking" : chat.isStreaming ? "Streaming" : "Idle");
+  const status = $derived(activityLabel(chat.activity.kind));
+  const showStreamingCursor = $derived(
+    chat.activity.kind === "streaming" || chat.activity.kind === "tool-continuation",
+  );
   const helperRunMeta = $derived([
     `${runCount} helper ${runCount === 1 ? "run" : "runs"}`,
     ...(activeRunCount > 0 ? [`${activeRunCount} active`] : []),
   ]);
 
+  function activityLabel(kind: string): string {
+    switch (kind) {
+      case "submitted":
+        return "Thinking";
+      case "streaming":
+        return "Streaming";
+      case "recovering":
+        return "Recovering";
+      case "tool-continuation":
+        return "Continuing";
+      case "awaiting-tools":
+        return "Waiting for tools";
+      default:
+        return "Idle";
+    }
+  }
 
   $effect(() => {
     const next = new Set(openRunIds);
@@ -59,7 +78,7 @@
 
   $effect(() => {
     void chat.messages.length;
-    void chat.isStreaming;
+    void chat.activity.kind;
 
     tick().then(() => {
       if (!scrollContainer) return;
@@ -69,7 +88,7 @@
 
   function send() {
     const text = input.trim();
-    if (!text || chat.isStreaming) return;
+    if (!text || chat.isBusy) return;
 
     chat.sendMessage({ text });
     input = "";
@@ -160,7 +179,7 @@
   connected={agent.connected}
   connectionText={agent.connected ? "Connected" : "Connecting"}
   actionLabel="New"
-  actionDisabled={chat.messages.length === 0 || chat.isStreaming}
+  actionDisabled={chat.messages.length === 0 || chat.isBusy}
   onAction={startNewChat}
 >
   {#snippet subbar()}
@@ -253,7 +272,7 @@
                   </section>
                 {/if}
               {/each}
-              {#if chat.isStreaming && message === chat.messages.at(-1) && message.role === "assistant"}
+              {#if showStreamingCursor && message === chat.messages.at(-1) && message.role === "assistant"}
                 <span class="cursor"></span>
               {/if}
             </div>
@@ -285,7 +304,7 @@
           }
         }}
       ></textarea>
-      <button disabled={!agent.connected || !input.trim() || chat.isStreaming}>Send</button>
+      <button disabled={!agent.connected || !input.trim() || chat.isBusy}>Send</button>
     </form>
   {/snippet}
 </ExampleChrome>
