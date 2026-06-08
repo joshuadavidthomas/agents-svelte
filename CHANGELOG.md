@@ -22,16 +22,21 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 - Added `chat.activity` and `chat.isBusy` as the primary Svelte chat activity API.
 - Added `chat.isRecovering` for Cloudflare Agents durable-turn recovery hints.
+- Added the `AgentToolInterruptedReason` type export from `agents-svelte/chat`.
 
 ### Changed
 
-- Updated Cloudflare Agents SDK package requirements to `agents@^0.14.0`, `@cloudflare/ai-chat@>=0.8.0`, and `@cloudflare/voice@>=0.2.1`.
-- Derived chat busy/streaming convenience getters from a single activity model instead of independent mutable flags; `chat.isStreaming` remains stream-focused and `chat.isBusy` covers broad "turn in progress" UI disabling, including recovery.
+- Updated Cloudflare Agents SDK package requirements to `agents@^0.15.0`, `@cloudflare/ai-chat@>=0.8.4`, and `@cloudflare/voice@>=0.2.1`.
+- Aligned AI SDK dependencies so the workspace resolves a single `ai` type graph.
+- Derived chat busy/streaming convenience getters from a single activity model instead of independent mutable flags; `chat.isBusy` covers broad "turn in progress" UI disabling, including recovery.
+- Narrowed `chat.isStreaming` so pending client tool prompts are busy but not streaming until client-side tool work is running; active streams and tool continuations still count as streaming.
 - Updated examples to require the synced Cloudflare Agents package versions.
 - Delayed `VoiceAgent({ enabled: false })` client construction until the controller is enabled, matching upstream `enabled` behavior.
 
 ### Fixed
 
+- Surface terminal chat recovery errors delivered through the stream resume handshake.
+- Preserve `reason` and `childStillRunning` on interrupted Agent tool run state.
 - Keep identified chat recovery active when an unrelated stream finishes.
 - Allow `VoiceAgent` to retry after a failed lazy connection attempt.
 

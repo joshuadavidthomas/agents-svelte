@@ -10,13 +10,13 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/svelte": "^4.0.0",
-    "@cloudflare/ai-chat": ">=0.8.0 <1.0.0",
+    "@ai-sdk/svelte": "^4.0.197",
+    "@cloudflare/ai-chat": ">=0.8.4 <1.0.0",
     "@sveltejs/adapter-cloudflare": "^7.2.8",
     "@sveltejs/kit": "^2.58.0",
-    "agents": ">=0.14.0 <1.0.0",
+    "agents": ">=0.15.0 <1.0.0",
     "agents-svelte": "workspace:*",
-    "ai": "^6.0.0",
+    "ai": "^6.0.197",
     "svelte": "^5.0.0",
     "workers-ai-provider": "^3.1.12"
   },

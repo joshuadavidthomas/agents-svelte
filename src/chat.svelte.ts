@@ -273,7 +273,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       this.status === "streaming" ||
       this.isServerStreaming ||
       this.isToolContinuation ||
-      this.#pendingToolCalls.some((toolCall) => !toolCall.handled)
+      this.#pendingToolCalls.some((toolCall) => toolCall.running)
     );
   }
 

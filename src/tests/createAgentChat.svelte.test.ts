@@ -1837,6 +1837,35 @@ describe("createAgentChat — pendingToolCalls", () => {
 });
 
 describe("createAgentChat — stream errors", () => {
+  it("surfaces terminal errors delivered through the resume handshake", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
+    });
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: "resume-error",
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "resume-error",
+      body: "recovery exhausted",
+      error: true,
+      done: true,
+    });
+
+    await vi.waitFor(() => {
+      expect(chat.error?.message).toBe("recovery exhausted");
+    });
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toMatchObject({
+      id: "resume-error",
+    });
+  });
+
   it("rejects a local stream on error frames and ignores later chunks", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock);
@@ -2246,7 +2275,7 @@ describe("createAgentChat — activity state", () => {
     expect(chat.isStreaming).toBe(false);
   });
 
-  it("isStreaming covers pending client tools and tool continuations", async () => {
+  it("isStreaming covers running client tools and tool continuations", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {
       initialMessages: [seedToolPart("pending-streaming", "get-weather")],
@@ -2256,13 +2285,24 @@ describe("createAgentChat — activity state", () => {
     expect(chat.pendingToolCalls).toHaveLength(1);
     expect(chat.activity).toMatchObject({ kind: "awaiting-tools" });
     expect(chat.isBusy).toBe(true);
+    expect(chat.isStreaming).toBe(false);
+
+    let resolveWeather!: (value: { weather: string }) => void;
+    const weather = new Promise<{ weather: string }>((resolve) => {
+      resolveWeather = resolve;
+    });
+    const run = chat.pendingToolCalls[0]!.run(() => weather);
+    flushSync();
+
+    expect(chat.pendingToolCalls[0]!.running).toBe(true);
     expect(chat.isStreaming).toBe(true);
 
-    chat.pendingToolCalls[0]!.addOutput({ output: { weather: "sunny" } });
+    resolveWeather({ weather: "sunny" });
+    await run;
     flushSync();
 
     expect(chat.isToolContinuation).toBe(true);
-    expect(chat.activity).toEqual({ kind: "tool-continuation" });
+    expect(chat.isBusy).toBe(true);
     expect(chat.isStreaming).toBe(true);
 
     mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });

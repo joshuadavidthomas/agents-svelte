@@ -136,6 +136,8 @@ describe("AgentToolEvents", () => {
         kind: "interrupted",
         runId: "interrupted-run",
         error: "parent restarted",
+        reason: "no-progress",
+        childStillRunning: true,
       }),
     );
 
@@ -150,6 +152,8 @@ describe("AgentToolEvents", () => {
     expect(events.runsById["interrupted-run"]).toMatchObject({
       status: "interrupted",
       error: "parent restarted",
+      reason: "no-progress",
+      childStillRunning: true,
     });
   });
 

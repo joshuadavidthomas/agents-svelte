@@ -143,7 +143,7 @@ For `examples/sveltekit-chat`, run:
 cd examples/sveltekit-chat
 pnpm run check
 pnpm run build
-pnpm exec wrangler deploy --dry-run --config wrangler.agent.jsonc
+pnpm exec wrangler deploy --dry-run
 ```
 
 Add equivalent validation notes as new examples are created.
