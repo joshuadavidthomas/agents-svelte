@@ -28,6 +28,7 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 - Updated Cloudflare Agents SDK package requirements to `agents@^0.15.0`, `@cloudflare/ai-chat@>=0.8.4`, and `@cloudflare/voice@>=0.2.1`.
 - Aligned AI SDK dependencies so the workspace resolves a single `ai` type graph.
+- Refreshed development and example build tooling dependencies.
 - Derived chat busy/streaming convenience getters from a single activity model instead of independent mutable flags; `chat.isBusy` covers broad "turn in progress" UI disabling, including recovery.
 - Narrowed `chat.isStreaming` so pending client tool prompts are busy but not streaming until client-side tool work is running; active streams and tool continuations still count as streaming.
 - Updated examples to require the synced Cloudflare Agents package versions.
