@@ -1,16 +1,41 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { collectSentProtocolFrames, findSentFrame, parseFrameRequestBody } from "./protocol";
 
 async function openCleanToolChat(page: Page): Promise<void> {
+  const initialMessagesLoaded = page.waitForResponse(
+    (response) => response.request().method() === "GET" && response.url().includes("/get-messages"),
+    { timeout: 45_000 },
+  );
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Dynamic Tools", exact: true })).toBeVisible();
   await expect(page.getByText("Connected")).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("4 of 4 tools active")).toBeVisible();
+  expect((await initialMessagesLoaded).ok()).toBe(true);
 
   const clearButton = page.getByRole("button", { name: "Clear" });
-  await clearButton.click();
-  await expect(page.getByRole("heading", { name: "Dynamic tools are ready" })).toBeVisible();
+  const emptyState = page.getByRole("heading", { name: "Dynamic tools are ready" });
+  const chatState = await waitForCleanChatState(page, clearButton, emptyState);
+
+  if (chatState === "clearable") {
+    await clearButton.click();
+  }
+  await expect(emptyState).toBeVisible();
+}
+
+async function waitForCleanChatState(
+  page: Page,
+  clearButton: Locator,
+  emptyState: Locator,
+): Promise<"clearable" | "empty"> {
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    if (await clearButton.isEnabled()) return "clearable";
+    if (await emptyState.isVisible()) return "empty";
+    await page.waitForTimeout(250);
+  }
+  throw new Error("Timed out waiting for the tool chat to become clearable or empty.");
 }
 
 async function triggerPageTitleTool(page: Page, prompt: string): Promise<void> {
