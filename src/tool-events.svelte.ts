@@ -7,6 +7,7 @@ import {
   type AgentToolEventState,
   type AgentToolRunState,
 } from "agents/chat";
+import type { AgentToolInterruptedReason } from "agents/agent-tools";
 import type { Agent } from "./agent.svelte.ts";
 
 type AgentToolEventsSocket = {
@@ -119,4 +120,10 @@ export function createAgentToolEvents(options: CreateAgentToolEventsOptions): Ag
   return events;
 }
 
-export type { AgentToolEvent, AgentToolEventMessage, AgentToolEventState, AgentToolRunState };
+export type {
+  AgentToolEvent,
+  AgentToolEventMessage,
+  AgentToolEventState,
+  AgentToolInterruptedReason,
+  AgentToolRunState,
+};

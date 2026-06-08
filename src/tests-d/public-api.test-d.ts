@@ -17,6 +17,7 @@ import type {
   AgentToolEventMessage,
   AgentToolEventState,
   AgentToolEvents,
+  AgentToolInterruptedReason,
   AgentToolRunState,
   ClientToolSchema,
   CreateAgentChatOptions,
@@ -81,6 +82,7 @@ declare const toolEvents: AgentToolEvents;
 declare const agentToolEvent: AgentToolEvent;
 declare const agentToolEventMessage: AgentToolEventMessage;
 declare const agentToolEventState: AgentToolEventState;
+declare const agentToolInterruptedReason: AgentToolInterruptedReason;
 declare const agentToolRunState: AgentToolRunState;
 declare const clientToolSchema: ClientToolSchema;
 declare const sendOptions: PrepareSendMessagesRequestOptions;
@@ -111,6 +113,7 @@ void toolEvents;
 void agentToolEvent;
 void agentToolEventMessage;
 void agentToolEventState;
+void agentToolInterruptedReason;
 void agentToolRunState;
 void clientToolSchema;
 void sendOptions;

@@ -8,7 +8,7 @@ A parent `Assistant` chat Agent exposes tools that dispatch helper Agents:
 - `plan` creates a `Planner` Agent run.
 - `compare` creates two `Researcher` Agent runs in parallel.
 
-The server sends `agent-tool-event` frames on the parent Agent socket. The Svelte UI collects them with `createAgentToolEvents({ agent })` and renders helper runs next to the matching chat tool call.
+The server sends `agent-tool-event` frames on the parent Agent socket. The Svelte UI collects them with `createAgentToolEvents({ agent })` and renders helper runs next to the matching chat tool call. Interrupted helper runs include a typed `reason` and `childStillRunning` so the UI can distinguish a soft interruption from a torn-down child without parsing error text.
 
 ## What it demonstrates
 

@@ -12,6 +12,7 @@ export type {
   AgentToolEvent,
   AgentToolEventMessage,
   AgentToolEventState,
+  AgentToolInterruptedReason,
   AgentToolRunState,
   CreateAgentToolEventsOptions,
 } from "./tool-events.svelte.ts";
