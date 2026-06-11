@@ -1302,6 +1302,26 @@ describe("createAgentChat — server-initiated messages", () => {
     expect(ack).toMatchObject({ id: "stream-abc" });
   });
 
+  it("dedupes duplicate fallback stream resume offers on the same socket", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    flushSync();
+    mock.sent.length = 0;
+    mock.sentMessages.length = 0;
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "stream-dup" });
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "stream-dup" });
+    flushSync();
+
+    expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toHaveLength(1);
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toMatchObject({
+      id: "stream-dup",
+    });
+  });
+
   it("calls onData for server-pushed data chunks", async () => {
     const mock = createMockAgent();
     const onData = vi.fn();
@@ -1323,6 +1343,81 @@ describe("createAgentChat — server-initiated messages", () => {
     flushSync();
 
     expect(onData).toHaveBeenCalledWith({ type: "data-progress", data: { step: 1 } });
+  });
+
+  it("keeps a local streaming assistant when a stale full snapshot arrives", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    void chat.sendMessage({ text: "hello" }).catch(() => {});
+    let requestId = "";
+    await vi.waitFor(() => {
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
+      expect(requestId).not.toBe("");
+    });
+
+    for (const body of [
+      '{"type":"start","messageId":"live-assistant"}',
+      '{"type":"text-start","id":"live-text"}',
+      '{"type":"text-delta","id":"live-text","delta":"live"}',
+    ]) {
+      mock.dispatchServerMessage({
+        type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+        id: requestId,
+        body,
+        done: false,
+      });
+    }
+
+    await vi.waitFor(() => {
+      expect(JSON.stringify(chat.messages)).toContain("live");
+    });
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_MESSAGES,
+      messages: chat.messages.filter((message) => message.role !== "assistant"),
+    });
+    flushSync();
+
+    expect(chat.messages.some((message) => message.id === "live-assistant")).toBe(true);
+    expect(JSON.stringify(chat.messages)).toContain("live");
+  });
+
+  it("reapplies an observed broadcast accumulator over stale full snapshots", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    flushSync();
+    mock.sent.length = 0;
+    mock.sentMessages.length = 0;
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "observed" });
+    for (const body of [
+      '{"type":"start","messageId":"observed-assistant"}',
+      '{"type":"text-start","id":"observed-text"}',
+      '{"type":"text-delta","id":"observed-text","delta":"observed"}',
+    ]) {
+      mock.dispatchServerMessage({
+        type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+        id: "observed",
+        body,
+        done: false,
+      });
+    }
+    flushSync();
+
+    expect(JSON.stringify(chat.messages)).toContain("observed");
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_MESSAGES,
+      messages: [{ id: "observed-assistant", role: "assistant", parts: [] }],
+    });
+    flushSync();
+
+    expect(JSON.stringify(chat.messages)).toContain("observed");
   });
 
   it("ignores unsolicited stream resume when resume is disabled", async () => {
@@ -1418,6 +1513,71 @@ describe("createAgentChat — replay parity", () => {
 
     expect(JSON.stringify(chat.messages)).not.toContain("old hydrated");
     expect(chat.messages[0]?.parts).toEqual([{ type: "text", text: "new content", state: "done" }]);
+  });
+
+  it("resets hydrated assistant parts for every non-continuation replayed start", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "replay-repeat" });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-repeat",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-repeat",
+      replay: true,
+      body: '{"type":"text-start","id":"repeat-text"}',
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-repeat",
+      replay: true,
+      body: '{"type":"text-delta","id":"repeat-text","delta":"duplicated"}',
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-repeat",
+      replay: true,
+      replayComplete: true,
+      body: "",
+    });
+    flushSync();
+    expect(JSON.stringify(chat.messages)).toContain("duplicated");
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-repeat",
+      replay: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    expect(chat.messages[0]?.parts).toEqual([]);
+  });
+
+  it("does not reset hydrated assistant parts for continuation replay starts", async () => {
+    const mock = createMockAgent();
+    const chat = seededReplayChat(mock);
+    await waitForChatInitialized(chat);
+    await finishInitialResume(mock);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "replay-cont" });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "replay-cont",
+      replay: true,
+      continuation: true,
+      body: '{"type":"start","messageId":"asst-1"}',
+    });
+    flushSync();
+
+    expect(chat.messages[0]?.parts).toEqual([{ type: "text", text: "old hydrated" }]);
   });
 
   it("drops replay chunks without a prior stream-resuming message", async () => {
@@ -1863,6 +2023,50 @@ describe("createAgentChat — stream errors", () => {
     });
     expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toMatchObject({
       id: "resume-error",
+    });
+  });
+
+  it("keeps replayed errored-stream content before surfacing the terminal resume error", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
+    });
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: "errored-replay",
+    });
+    for (const body of [
+      '{"type":"start","messageId":"errored-assistant"}',
+      '{"type":"text-start","id":"errored-text"}',
+      '{"type":"text-delta","id":"errored-text","delta":"partial"}',
+      '{"type":"text-delta","id":"errored-text","delta":" content"}',
+    ]) {
+      mock.dispatchServerMessage({
+        type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+        id: "errored-replay",
+        replay: true,
+        body,
+        done: false,
+      });
+    }
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "errored-replay",
+      body: "model failed",
+      error: true,
+      done: true,
+    });
+
+    await vi.waitFor(() => {
+      expect(chat.error?.message).toBe("model failed");
+      expect(JSON.stringify(chat.messages)).toContain("partial content");
+    });
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toMatchObject({
+      id: "errored-replay",
     });
   });
 

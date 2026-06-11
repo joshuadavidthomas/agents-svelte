@@ -132,7 +132,7 @@ void voiceClientOptions;
 void voiceClientEvent;
 void voiceClientEventMap;
 
-const agentOptions: CreateAgentOptions = { agent: "ChatAgent" };
+const agentOptions: CreateAgentOptions = { agent: "ChatAgent", defaultCallTimeout: 30_000 };
 const chatOptions = {} as CreateAgentChatOptions;
 const toolEventsOptions: CreateAgentToolEventsOptions = { agent };
 const voiceInputOptions: VoiceInputOptions = {

@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@ai-sdk/svelte": "^4.0.197",
-    "@cloudflare/ai-chat": ">=0.8.4 <1.0.0",
-    "agents": ">=0.15.0 <1.0.0",
+    "@cloudflare/ai-chat": "0.8.6",
+    "agents": "0.16.2",
     "agents-svelte": "workspace:*",
     "ai": "^6.0.197",
     "partysocket": "^1.1.18",

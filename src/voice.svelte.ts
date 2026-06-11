@@ -5,6 +5,7 @@ import {
   type VoiceClientEvent,
   type VoiceClientOptions,
   type VoiceStatus,
+  type VoiceAudioFormat,
   type TranscriptMessage,
   type VoicePipelineMetrics,
   type VoiceTransport,
@@ -44,6 +45,7 @@ export interface VoiceAgentOptions extends VoiceClientOptions {
 
 export class VoiceAgent {
   readonly #clientOptions: VoiceClientOptions;
+  #pendingOutputDeviceId: string | undefined;
   #client: VoiceClient | null = null;
   #connectStarted = false;
   #enabled = true;
@@ -56,12 +58,14 @@ export class VoiceAgent {
   #isMuted = $state(false);
   #connected = $state(false);
   #error = $state<string | null>(null);
+  #outputDeviceError = $state<string | null>(null);
   #lastCustomMessage = $state<unknown>(null);
 
   constructor(options: VoiceAgentOptions) {
     const { enabled = true, ...clientOptions } = options;
     this.#enabled = enabled;
     this.#clientOptions = clientOptions;
+    this.#pendingOutputDeviceId = clientOptions.outputDeviceId;
   }
 
   connect(): void {
@@ -109,6 +113,15 @@ export class VoiceAgent {
   get error(): string | null {
     return this.#error;
   }
+  get outputDeviceError(): string | null {
+    return this.#outputDeviceError;
+  }
+  get audioFormat(): VoiceAudioFormat | null {
+    return this.#client?.audioFormat ?? null;
+  }
+  get serverProtocolVersion(): number | null {
+    return this.#client?.serverProtocolVersion ?? null;
+  }
   get lastCustomMessage(): unknown {
     return this.#lastCustomMessage;
   }
@@ -128,6 +141,11 @@ export class VoiceAgent {
   sendJSON(data: Record<string, unknown>): void {
     this.#client?.sendJSON(data);
   }
+  setOutputDevice(deviceId?: string): Promise<void> {
+    this.#pendingOutputDeviceId = deviceId;
+    this.#clientOptions.outputDeviceId = deviceId;
+    return this.#client?.setOutputDevice(deviceId) ?? Promise.resolve();
+  }
 
   close(): void {
     this.#disposeClient();
@@ -138,7 +156,10 @@ export class VoiceAgent {
       return this.#client;
     }
 
-    const client = new VoiceClient(this.#clientOptions);
+    const client = new VoiceClient({
+      ...this.#clientOptions,
+      outputDeviceId: this.#pendingOutputDeviceId,
+    });
     client.addEventListener("statuschange", this.#syncStatus);
     client.addEventListener("transcriptchange", this.#syncTranscript);
     client.addEventListener("interimtranscript", this.#syncInterimTranscript);
@@ -147,6 +168,7 @@ export class VoiceAgent {
     client.addEventListener("mutechange", this.#syncMute);
     client.addEventListener("connectionchange", this.#syncConnection);
     client.addEventListener("error", this.#syncError);
+    client.addEventListener("outputdeviceerror", this.#syncOutputDeviceError);
     client.addEventListener("custommessage", this.#syncCustomMessage);
     this.#client = client;
     this.#syncAll();
@@ -166,6 +188,7 @@ export class VoiceAgent {
       client.removeEventListener("mutechange", this.#syncMute);
       client.removeEventListener("connectionchange", this.#syncConnection);
       client.removeEventListener("error", this.#syncError);
+      client.removeEventListener("outputdeviceerror", this.#syncOutputDeviceError);
       client.removeEventListener("custommessage", this.#syncCustomMessage);
       client.disconnect();
     }
@@ -181,6 +204,7 @@ export class VoiceAgent {
     this.#syncMute();
     this.#syncConnection();
     this.#syncError();
+    this.#syncOutputDeviceError();
     this.#syncCustomMessage();
   }
 
@@ -193,6 +217,7 @@ export class VoiceAgent {
     this.#isMuted = false;
     this.#connected = false;
     this.#error = null;
+    this.#outputDeviceError = null;
     this.#lastCustomMessage = null;
   }
 
@@ -220,6 +245,9 @@ export class VoiceAgent {
   #syncError = (): void => {
     this.#error = this.#client?.error ?? null;
   };
+  #syncOutputDeviceError = (): void => {
+    this.#outputDeviceError = this.#client?.outputDeviceError ?? null;
+  };
   #syncCustomMessage = (): void => {
     this.#lastCustomMessage = this.#client?.lastCustomMessage ?? null;
   };
@@ -229,6 +257,9 @@ export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
   const v = new VoiceAgent(options);
   $effect(() => {
     v.setEnabled(options.enabled ?? true);
+  });
+  $effect(() => {
+    void v.setOutputDevice(options.outputDeviceId);
   });
   onMount(() => v.connect());
   onDestroy(() => v.close());

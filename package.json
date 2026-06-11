@@ -61,14 +61,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "agents": "^0.15.0",
+    "agents": "^0.16.2",
     "nanoid": "^5.1.9"
   },
   "devDependencies": {
-    "@ai-sdk/react": "3.0.199",
+    "@ai-sdk/react": "3.0.204",
     "@ai-sdk/svelte": "^4.0.197",
-    "@cloudflare/ai-chat": "^0.8.4",
-    "@cloudflare/voice": "^0.2.1",
+    "@cloudflare/ai-chat": "0.8.6",
+    "@cloudflare/voice": "0.3.2",
     "@cloudflare/workers-types": "^4.20260607.1",
     "@playwright/test": "^1.60.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
@@ -88,8 +88,8 @@
   },
   "peerDependencies": {
     "@ai-sdk/svelte": "^4.0.0",
-    "@cloudflare/ai-chat": ">=0.8.4 <1.0.0",
-    "@cloudflare/voice": ">=0.2.1 <1.0.0",
+    "@cloudflare/ai-chat": ">=0.8.6 <1.0.0",
+    "@cloudflare/voice": ">=0.3.2 <1.0.0",
     "ai": "^6.0.0",
     "svelte": "^5.0.0"
   },

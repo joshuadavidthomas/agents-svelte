@@ -54,10 +54,17 @@
     }
   }
 
+  function getAudioOutputLabel(device: MediaDeviceInfo, index: number): string {
+    if (device.deviceId === "communications") return "Communications default";
+    return device.label || `Speaker ${index + 1}`;
+  }
+
   let transport = $state<VoiceTransportMode>("websocket");
   let sfuEnabled = $state(false);
   let sttModel = $state<SttModel>("nova-3");
   let llmModel = $state<LlmModel>("glm");
+  let outputDeviceId = $state("default");
+  let audioOutputDevices = $state<MediaDeviceInfo[]>([]);
   let textInput = $state("");
   let composingTextInput = $state(false);
   let webrtcState = $state("new");
@@ -88,6 +95,7 @@
         ? { model: sttModel, llm: llmModel, e2e: "true" }
         : { model: sttModel, llm: llmModel },
       audioInput: sfuAudioInput,
+      outputDeviceId,
     });
   }
 
@@ -117,6 +125,17 @@
     reconnectVoice();
   }
 
+  function setOutputDevice(deviceId: string) {
+    outputDeviceId = deviceId;
+    void voice.setOutputDevice(deviceId);
+  }
+
+  async function refreshAudioOutputs() {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    audioOutputDevices = devices.filter((device) => device.kind === "audiooutput");
+  }
+
   const isInCall = $derived(voice.status !== "idle");
   const isBusy = $derived(voice.status === "thinking");
   const canUseWebRTC = $derived(sfuEnabled);
@@ -135,6 +154,13 @@
       .catch(() => {
         sfuEnabled = false;
       });
+
+    void refreshAudioOutputs();
+    const onDeviceChange = () => void refreshAudioOutputs();
+    navigator.mediaDevices?.addEventListener("devicechange", onDeviceChange);
+    return () => {
+      navigator.mediaDevices?.removeEventListener("devicechange", onDeviceChange);
+    };
   });
 
   $effect(() => {
@@ -313,6 +339,22 @@
             </button>
           </div>
         </div>
+
+        <div class="selector-row">
+          <span>Speaker</span>
+          <div class="selector-actions">
+            <select
+              aria-label="Audio output device"
+              value={outputDeviceId}
+              onchange={(event) => setOutputDevice(event.currentTarget.value)}
+            >
+              <option value="default">System default</option>
+              {#each audioOutputDevices.filter((device) => device.deviceId !== "default") as device, index (device.deviceId)}
+                <option value={device.deviceId}>{getAudioOutputLabel(device, index)}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
       </section>
 
       <section class:active={isInCall} class="status-card">
@@ -377,6 +419,10 @@
 
       {#if voice.error}
         <div class="error" role="alert">{voice.error}</div>
+      {/if}
+
+      {#if voice.outputDeviceError}
+        <div class="error" role="alert">{voice.outputDeviceError}</div>
       {/if}
     </div>
   </main>
@@ -836,7 +882,8 @@
     width: 100%;
   }
 
-  input {
+  input,
+  select {
     flex: 1;
     min-height: 2.75rem;
     border: 1px solid #e5e7eb;
@@ -850,7 +897,12 @@
     outline: none;
   }
 
-  input:focus {
+  select {
+    min-width: min(100%, 16rem);
+  }
+
+  input:focus,
+  select:focus {
     border-color: transparent;
     box-shadow:
       0 0 0 2px #93c5fd,
@@ -891,7 +943,8 @@
   }
 
   button:disabled,
-  input:disabled {
+  input:disabled,
+  select:disabled {
     cursor: not-allowed;
     opacity: 0.45;
   }
@@ -930,7 +983,8 @@
       flex: 1;
     }
 
-    input {
+    input,
+    select {
       width: 100%;
     }
   }

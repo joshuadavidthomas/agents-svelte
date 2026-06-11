@@ -15,9 +15,10 @@ The app defaults to Nova 3 STT, GLM 4.7 Flash for the LLM, and Workers AI TTS. T
 - `new VoiceAgent({ agent: "MyVoiceAgent" })` for explicit controller lifetime when rebuilding voice options
 - Switching the voice controller between WebSocket and WebRTC/SFU microphone input
 - Switching STT between Nova 3 and Flux, with Nova 3 as the default
+- Selecting the browser audio output device with `voice.setOutputDevice(...)`
 - `voice.startCall()`, `voice.endCall()`, and `voice.toggleMute()`
 - Sending typed text messages with `voice.sendText(...)`
-- Reactive transcript, interim transcript, status, audio level, metrics, connection, and error state
+- Reactive transcript, interim transcript, status, audio level, metrics, connection, error, and output-device error state
 - Server-side `withVoice(Agent)` with Workers AI STT, Workers AI or ElevenLabs TTS, and LLM tools
 - Example-local `/sfu/*` routes for Cloudflare Realtime SFU integration
 

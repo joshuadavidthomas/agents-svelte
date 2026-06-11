@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "svelte";
-import type { VoiceTransport } from "../voice.svelte.ts";
+import type { VoiceAudioInput, VoiceTransport } from "../voice.svelte.ts";
 
 let transportInstance: (VoiceTransport & { connected: boolean }) | null = null;
 let transportSendJSON: ReturnType<typeof vi.fn<(data: Record<string, unknown>) => void>>;
@@ -84,6 +84,7 @@ describe("VoiceAgent", () => {
     expect(v.interimTranscript).toBeNull();
     expect(v.metrics).toBeNull();
     expect(v.error).toBeNull();
+    expect(v.outputDeviceError).toBeNull();
     expect(v.isMuted).toBe(false);
   });
 
@@ -210,6 +211,60 @@ describe("VoiceAgent", () => {
         type: "app_event",
         payload: { ok: true },
       }),
+    );
+  });
+
+  it("surfaces output device selection errors", async () => {
+    const sinkDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "setSinkId");
+    const playDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "play");
+    const audioContextDescriptor = Object.getOwnPropertyDescriptor(window, "AudioContext");
+    Object.defineProperty(HTMLMediaElement.prototype, "setSinkId", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "play", {
+      configurable: true,
+      value: vi.fn(async () => {}),
+    });
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      value: class FakeAudioContext {
+        state = "running";
+        destination = {};
+        resume = vi.fn(async () => {});
+        close = vi.fn(async () => {});
+        createMediaStreamDestination = vi.fn(() => ({ stream: new MediaStream() }));
+      },
+    });
+    cleanups.push(() => {
+      if (sinkDescriptor) {
+        Object.defineProperty(HTMLMediaElement.prototype, "setSinkId", sinkDescriptor);
+      } else {
+        delete (HTMLMediaElement.prototype as { setSinkId?: unknown }).setSinkId;
+      }
+      if (playDescriptor) {
+        Object.defineProperty(HTMLMediaElement.prototype, "play", playDescriptor);
+      }
+      if (audioContextDescriptor) {
+        Object.defineProperty(window, "AudioContext", audioContextDescriptor);
+      }
+    });
+
+    const audioInput: VoiceAudioInput = {
+      onAudioLevel: null,
+      onAudioData: null,
+      start: vi.fn(async () => {}),
+      stop: vi.fn(),
+    };
+    const v = makeVoice({ audioInput, outputDeviceId: "external-speaker" });
+    await vi.waitFor(() => expect(v.connected).toBe(true));
+
+    await v.startCall();
+
+    await vi.waitFor(() =>
+      expect(v.outputDeviceError).toBe(
+        "Audio output device selection is not supported in this browser.",
+      ),
     );
   });
 

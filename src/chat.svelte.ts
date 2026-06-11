@@ -886,6 +886,36 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     ];
   }
 
+  #mergeObservedAccumulator(messages: M[]): M[] {
+    const state = this.#streamState.current;
+    if (state.status !== "observing" || state.accumulator.parts.length === 0) {
+      return messages;
+    }
+
+    const snapshotIndex = messages.findIndex(
+      (message) => message.id === state.accumulator.messageId,
+    );
+    const snapshotParts = snapshotIndex >= 0 ? messages[snapshotIndex].parts.length : 0;
+    if (state.accumulator.parts.length < snapshotParts) {
+      return messages;
+    }
+
+    return state.accumulator.mergeInto(messages) as M[];
+  }
+
+  #protectStreamingAssistantMessage(messageId: string): void {
+    const messageIndex = this.messages.findIndex((message) => message.id === messageId);
+    const anchorMessageId =
+      messageIndex >= 0
+        ? (this.messages[messageIndex - 1]?.id ?? null)
+        : (this.messages.at(-1)?.id ?? null);
+
+    this.#protectedStreamingAssistant = {
+      assistantId: messageId,
+      anchorMessageId,
+    };
+  }
+
   #protectStreamingAssistantTail(): void {
     if (this.status !== "streaming") {
       return;
@@ -1241,12 +1271,15 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         this.messages = [];
         break;
 
-      case "messages-replaced":
+      case "messages-replaced": {
         this.#serverSnapshotSeq++;
         this.#resetRecoveryState();
-        this.messages = this.#preserveProtectedStreamingAssistant(event.messages);
+        let messages = this.#preserveProtectedStreamingAssistant(event.messages);
+        messages = this.#mergeObservedAccumulator(messages);
+        this.messages = messages;
         this.#collapseHydratedReplayTextParts();
         break;
+      }
 
       case "message-updated": {
         if (this.#protectedStreamingAssistant?.assistantId === event.message.id) {
@@ -1342,6 +1375,10 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         }
         break;
       }
+
+      case "protect-streaming-assistant":
+        this.#protectStreamingAssistantMessage(event.messageId);
+        break;
 
       case "replay-hydrated-reset":
         this.#resetHydratedAssistantForReplay(event.messageId);

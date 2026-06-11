@@ -22,6 +22,7 @@ interface QueryCacheEntry {
 }
 
 const DEFAULT_QUERY_CACHE_TTL = 5 * 60 * 1000;
+const DEFAULT_CALL_TIMEOUT_MS = 30_000;
 const queryCache = new Map<string, QueryCacheEntry>();
 
 function getCachedQuery(key: string): QueryCacheEntry | undefined {
@@ -95,6 +96,8 @@ export interface CreateAgentOptions {
   protocols?: string[];
   id?: string;
   prefix?: string;
+  /** Default timeout for non-streaming `call()`s. Defaults to 30_000 ms; set to 0 to disable. */
+  defaultCallTimeout?: number;
   sub?: ReadonlyArray<SubAgentRoute>;
   /** Called when the server sends the agent's identity on connect. */
   onIdentity?: (name: string, agent: string) => void;
@@ -391,6 +394,7 @@ export class Agent<AgentT = unknown, State = unknown> {
       protocol: options.protocol,
       protocols: options.protocols,
       query,
+      defaultCallTimeout: options.defaultCallTimeout,
       onIdentityChange: () => {},
     };
     const routingOpts = options.basePath
@@ -531,7 +535,13 @@ export class Agent<AgentT = unknown, State = unknown> {
       case MessageType.RPC: {
         const r = msg as unknown as RPCResponse;
         const p = this.#pending.get(r.id);
-        if (!p) return;
+        if (!p) {
+          console.warn(
+            `[agents-svelte] Discarded an RPC response with no matching pending call (id "${r.id}"). ` +
+              "The call likely timed out or was rejected when its connection closed before the response arrived.",
+          );
+          return;
+        }
         if (!r.success) {
           this.#pending.delete(r.id);
           p.reject(new Error(r.error));
@@ -668,14 +678,21 @@ export class Agent<AgentT = unknown, State = unknown> {
         : (options as CallOptions | undefined)?.stream;
       const timeout = isLegacyFormat ? undefined : (options as CallOptions | undefined)?.timeout;
 
-      if (timeout) {
+      const effectiveTimeout =
+        timeout !== undefined
+          ? timeout
+          : stream
+            ? undefined
+            : (this.#options.defaultCallTimeout ?? DEFAULT_CALL_TIMEOUT_MS);
+
+      if (effectiveTimeout) {
         timeoutId = setTimeout(() => {
           const pending = this.#pending.get(id);
           this.#pending.delete(id);
-          const errorMessage = `RPC call to ${method} timed out after ${timeout}ms`;
+          const errorMessage = `RPC call to ${method} timed out after ${effectiveTimeout}ms`;
           pending?.stream?.onError?.(errorMessage);
           reject(new Error(errorMessage));
-        }, timeout);
+        }, effectiveTimeout);
       }
 
       this.#pending.set(id, {

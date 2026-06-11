@@ -336,6 +336,58 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     }
   });
 
+  it("applies defaultCallTimeout to non-streaming RPC calls", async () => {
+    vi.useFakeTimers();
+    try {
+      const agent = makeAgent({
+        agent: "TestCallableAgent",
+        host: "localhost:8787",
+        protocol: "ws",
+        defaultCallTimeout: 25,
+      });
+
+      const pending = agent.call("slow", []);
+
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(pending).rejects.toThrow("RPC call to slow timed out after 25ms");
+      expect(latestSocket().sent).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("warns and ignores late RPC responses after a timeout", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const agent = makeAgent({
+        agent: "TestCallableAgent",
+        host: "localhost:8787",
+        protocol: "ws",
+        defaultCallTimeout: 25,
+      });
+      const socket = latestSocket();
+      const pending = agent.call("slow", []);
+      const request = JSON.parse(socket.sent[0] ?? "{}") as { id?: string };
+
+      await vi.advanceTimersByTimeAsync(25);
+      await expect(pending).rejects.toThrow("RPC call to slow timed out after 25ms");
+
+      dispatchMessage(socket, {
+        type: MessageType.RPC,
+        id: request.id,
+        success: true,
+        result: "late success",
+      });
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Discarded an RPC response"));
+    } finally {
+      warn.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps the socket reference across transient close events for PartySocket reconnects", async () => {
     const agent = makeAgent({
       agent: "TestCallableAgent",

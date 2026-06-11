@@ -5,11 +5,7 @@ Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/
 `agents-svelte` gives Svelte apps lifecycle-managed controllers for Agent state, typed RPC, AI chat, tool events, and voice. It is a community package, not an official Cloudflare package, and the API may change before `1.0`.
 
 > [!NOTE]
-> This is a slop-port of the official Cloudflare Agents React APIs from `agents/react`.
->
-> I pointed AI at the upstream implementation, told it to port the behavior to idiomatic Svelte 5, then kept yelling “no, that smells like React” until the API felt more Svelte-shaped. It has unit, type, and browser E2E coverage, and the examples exercise the main flows, but I have not used it in a serious production app yet.
->
-> Expect rough edges before `1.0`.
+> This package is experimental and may change before `1.0`. It tracks the official Cloudflare Agents packages while keeping a Svelte-native API.
 
 ## Installation
 
@@ -20,16 +16,16 @@ npm install agents-svelte
 For chat:
 
 ```bash
-npm install @ai-sdk/svelte @cloudflare/ai-chat@^0.8.4
+npm install @ai-sdk/svelte @cloudflare/ai-chat@^0.8.6
 ```
 
 For voice:
 
 ```bash
-npm install @cloudflare/voice@^0.2.1
+npm install @cloudflare/voice@^0.3.2
 ```
 
-This version expects `agents@^0.15.0`, `@cloudflare/ai-chat@>=0.8.4`, and `@cloudflare/voice@>=0.2.1`.
+This version expects `agents@^0.16.2`, `@cloudflare/ai-chat@>=0.8.6`, and `@cloudflare/voice@>=0.3.2`.
 
 Use this package from a Svelte 5 app built with Vite or another toolchain that supports `.svelte.ts` files.
 
@@ -213,7 +209,7 @@ Notes:
 
 - The primary readiness signal is `agent.identity.identified`; imperative code can also `await agent.ready` after `.connect()`.
 - State and identity transitions are reactive fields. Use `onIdentity` or `onIdentityChange` only for side effects outside Svelte reactivity.
-- `agent.call(...)` accepts Cloudflare's RPC options, including `{ timeout, stream }`.
+- `agent.call(...)` accepts Cloudflare's RPC options, including `{ timeout, stream }`. Non-streaming calls default to a 30 second timeout; pass `timeout: 0` or `defaultCallTimeout: 0` to disable it. A timeout rejects the client promise but does not cancel server work.
 - `agent.socket` is `null` before `.connect()` and after explicit `.close()`.
 - Passing `agent: "ChatAgent"` is normalized to the route segment `chat-agent`.
 
@@ -342,9 +338,9 @@ On the server, use `createToolsFromClientSchemas(options.clientTools)` to expose
 <button onclick={() => voice.endCall()}>End call</button>
 ```
 
-Read `voice.status`, `voice.transcript`, `voice.interimTranscript`, `voice.audioLevel`, and `voice.isMuted` in markup. Use `voice.startCall()`, `voice.endCall()`, `voice.toggleMute()`, and `voice.sendText(text)` from event handlers.
+Read `voice.status`, `voice.transcript`, `voice.interimTranscript`, `voice.audioLevel`, `voice.isMuted`, `voice.error`, and `voice.outputDeviceError` in markup. Use `voice.startCall()`, `voice.endCall()`, `voice.toggleMute()`, `voice.sendText(text)`, and `voice.setOutputDevice(deviceId)` from event handlers.
 
-Pass `enabled: false` to delay creating and connecting the voice client, then call `voice.setEnabled(true)` when the voice transport should start.
+Pass `enabled: false` to delay creating and connecting the voice client, then call `voice.setEnabled(true)` when the voice transport should start. Pass `outputDeviceId` or call `voice.setOutputDevice(...)` to route playback to a specific audio output device when the browser supports speaker selection.
 
 ### Voice input
 
