@@ -2055,6 +2055,64 @@ describe("createAgentChat — stream chunk repair", () => {
     });
   });
 
+  it("trusts terminal approval snapshots when they already include a later assistant", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, {
+      resume: true,
+      initialMessages: weatherApprovalInitialMessages(),
+    });
+    await waitForChatInitialized(chat);
+
+    chat.addToolApprovalResponse({
+      id: weatherApprovalFlow.approvalId,
+      approved: false,
+    });
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_TOOL_APPROVAL)).toMatchObject({
+        toolCallId: weatherApprovalFlow.toolCallId,
+        approved: false,
+        autoContinue: true,
+      });
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
+    });
+
+    const userMessage = chat.messages.find((message) => message.id === weatherApprovalFlow.userId);
+    const deniedAssistant = chat.messages.find(
+      (message) => message.id === weatherApprovalFlow.assistantId,
+    );
+    expect(userMessage).toBeDefined();
+    expect(deniedAssistant).toBeDefined();
+
+    const terminalAssistant: UIMessage = {
+      id: "assistant-denied-terminal",
+      role: "assistant",
+      parts: [
+        {
+          type: "text",
+          text: "The approval request was denied, so no action was taken.",
+        },
+      ],
+    };
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_MESSAGES,
+      messages: [userMessage!, deniedAssistant!, terminalAssistant],
+    });
+
+    await vi.waitFor(() => {
+      expect(chat.messages.map((message) => message.id)).toEqual([
+        weatherApprovalFlow.userId,
+        weatherApprovalFlow.assistantId,
+        "assistant-denied-terminal",
+      ]);
+      expect(chat.messages.map((message) => message.role)).toEqual([
+        "user",
+        "assistant",
+        "assistant",
+      ]);
+    });
+  });
+
   it("starts a new reasoning part when a continuation stream receives reasoning-delta first", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, {

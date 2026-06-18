@@ -880,6 +880,15 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       return messages;
     }
 
+    const protectedIndex = messages.findIndex((message) => message.id === protection.assistantId);
+    const snapshotHasLaterAssistant =
+      protectedIndex >= 0 &&
+      messages.slice(protectedIndex + 1).some((message) => message.role === "assistant");
+    if (snapshotHasLaterAssistant) {
+      this.#protectedStreamingAssistant = null;
+      return messages;
+    }
+
     return [
       ...messages.filter((message) => message.id !== protection.assistantId),
       protectedAssistant,
