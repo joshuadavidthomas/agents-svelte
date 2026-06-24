@@ -59,7 +59,11 @@ type ActiveStreamSession = {
   activeReasoningIds: Set<string>;
   finish: (
     action: () => void,
-    options?: { ignoreRemaining?: boolean; emitLocalFinish?: boolean },
+    options?: {
+      ignoreRemaining?: boolean;
+      emitLocalFinish?: boolean;
+      supersededError?: Error;
+    },
   ) => void;
 };
 
@@ -496,9 +500,28 @@ export class AgentChatTransport<
     };
 
     const existingSession = this.#activeStreams.get(requestId);
-    existingSession?.finish(() => existingSession.controller.close(), {
-      emitLocalFinish: false,
-    });
+    if (existingSession) {
+      const finishSession = session.finish;
+      session.finish = (action, options) => {
+        finishSession(action, options);
+        if (options?.emitLocalFinish === false && !options.ignoreRemaining) {
+          return;
+        }
+        existingSession.finish(
+          () => {
+            if (options?.supersededError) {
+              existingSession.controller.error(options.supersededError);
+            } else {
+              existingSession.controller.close();
+            }
+          },
+          {
+            emitLocalFinish: false,
+            ignoreRemaining: options?.ignoreRemaining,
+          },
+        );
+      };
+    }
 
     this.#activeStreams.set(requestId, session);
     return session;
@@ -594,9 +617,11 @@ export class AgentChatTransport<
     const session = this.#activeStreams.get(requestId);
     if (session) {
       if (data.error) {
-        session.finish(() => session.controller.error(new Error(data.body || "Stream error")), {
+        const streamError = new Error(data.body || "Stream error");
+        session.finish(() => session.controller.error(streamError), {
           ignoreRemaining: true,
           emitLocalFinish: true,
+          supersededError: streamError,
         });
         return;
       }

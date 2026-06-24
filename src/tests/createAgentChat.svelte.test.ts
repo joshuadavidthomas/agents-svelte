@@ -44,6 +44,16 @@ async function expectSettled(promise: Promise<unknown>, timeout = 250) {
   expect(result).toBe("settled");
 }
 
+async function expectNotSettled(promise: Promise<unknown>, timeout = 100) {
+  const result = await Promise.race([
+    promise.then(() => "settled"),
+    new Promise<"timeout">((resolve) => {
+      setTimeout(() => resolve("timeout"), timeout);
+    }),
+  ]);
+  expect(result).toBe("timeout");
+}
+
 function findSent(mock: MockAgent, type: string): Record<string, unknown> | undefined {
   return mock.sentMessages.find((m) => m.type === type);
 }
@@ -1303,6 +1313,9 @@ describe("createAgentChat — server-initiated messages", () => {
       type: MessageType.CF_AGENT_STREAM_RESUMING,
       id: requestId,
     });
+
+    await expectNotSettled(request);
+
     mock.dispatchServerMessage({
       type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
       id: requestId,
