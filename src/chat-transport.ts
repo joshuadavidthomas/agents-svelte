@@ -495,6 +495,11 @@ export class AgentChatTransport<
       },
     };
 
+    const existingSession = this.#activeStreams.get(requestId);
+    existingSession?.finish(() => existingSession.controller.close(), {
+      emitLocalFinish: false,
+    });
+
     this.#activeStreams.set(requestId, session);
     return session;
   }
