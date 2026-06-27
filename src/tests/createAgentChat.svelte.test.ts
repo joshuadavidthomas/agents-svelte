@@ -34,6 +34,26 @@ async function waitForChatInitialized(chat: { initialized: boolean }, timeout = 
   );
 }
 
+async function expectSettled(promise: Promise<unknown>, timeout = 250) {
+  const result = await Promise.race([
+    promise.then(() => "settled"),
+    new Promise<"timeout">((resolve) => {
+      setTimeout(() => resolve("timeout"), timeout);
+    }),
+  ]);
+  expect(result).toBe("settled");
+}
+
+async function expectNotSettled(promise: Promise<unknown>, timeout = 100) {
+  const result = await Promise.race([
+    promise.then(() => "settled"),
+    new Promise<"timeout">((resolve) => {
+      setTimeout(() => resolve("timeout"), timeout);
+    }),
+  ]);
+  expect(result).toBe("timeout");
+}
+
 function findSent(mock: MockAgent, type: string): Record<string, unknown> | undefined {
   return mock.sentMessages.find((m) => m.type === type);
 }
@@ -1275,6 +1295,34 @@ describe("createAgentChat — server-initiated messages", () => {
     expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toMatchObject({
       id: "resume-success",
     });
+  });
+
+  it("settles a local send when resume replaces the same request stream", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    const request = chat.sendMessage({ text: "hello" });
+    let requestId = "";
+    await vi.waitFor(() => {
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
+      expect(requestId).not.toBe("");
+    });
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: requestId,
+    });
+
+    await expectNotSettled(request);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      done: true,
+    });
+
+    await expectSettled(request);
   });
 
   it("CF_AGENT_STREAM_RESUMING triggers fallback and ACK when no active resume", async () => {
