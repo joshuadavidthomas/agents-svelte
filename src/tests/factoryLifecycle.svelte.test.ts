@@ -45,6 +45,21 @@ vi.mock("partysocket", () => ({
 
 vi.mock("agents/client", () => ({
   AgentClient: MockPartySocket,
+  AgentConnectionError: class AgentConnectionError extends Error {
+    code: number;
+    reason: string;
+    wasClean: boolean;
+
+    constructor(event: CloseEvent) {
+      const reason = event.reason || `WebSocket closed with code ${event.code}`;
+      super(`Agent connection closed: ${reason}`);
+      this.name = "AgentConnectionError";
+      this.code = event.code;
+      this.reason = event.reason;
+      this.wasClean = event.wasClean;
+    }
+  },
+  DEFAULT_CALL_TIMEOUT_MS: 30000,
   createStubProxy: (call: (method: string, args: unknown[]) => unknown) =>
     new Proxy(
       {},
@@ -55,6 +70,8 @@ vi.mock("agents/client", () => ({
         },
       },
     ),
+  isTerminalCloseEvent: (event: CloseEvent) =>
+    event.code === 1008 || (event.code >= 4000 && event.code <= 4999),
 }));
 
 function createFakeVoiceTransport() {

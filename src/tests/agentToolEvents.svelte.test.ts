@@ -157,6 +157,80 @@ describe("AgentToolEvents", () => {
     });
   });
 
+  it("projects progress and milestone chunks onto the run state", () => {
+    const mock = createMockAgent();
+    const events = new AgentToolEvents({ agent: mock.agent });
+    events.connect();
+    const milestoneAt = 9999999999999;
+
+    mock.dispatchServerMessage(
+      frame(0, {
+        kind: "started",
+        runId: "research-progress",
+        agentType: "Researcher",
+        order: 0,
+      }),
+    );
+    mock.dispatchServerMessage(
+      frame(1, {
+        kind: "chunk",
+        runId: "research-progress",
+        body: JSON.stringify({
+          type: "data-agent-progress",
+          transient: true,
+          data: {
+            fraction: 0.5,
+            phase: "searching",
+            message: "Finding sources",
+          },
+        }),
+      }),
+    );
+    mock.dispatchServerMessage(
+      frame(2, {
+        kind: "chunk",
+        runId: "research-progress",
+        body: JSON.stringify({
+          type: "data-agent-milestone",
+          data: {
+            name: "sources-gathered",
+            sequence: 1,
+            at: milestoneAt,
+            data: { sources: 2 },
+          },
+        }),
+      }),
+    );
+    mock.dispatchServerMessage(
+      frame(3, {
+        kind: "chunk",
+        runId: "research-progress",
+        body: JSON.stringify({
+          type: "data-agent-milestone",
+          data: {
+            name: "sources-gathered",
+            sequence: 1,
+            at: milestoneAt,
+            data: { sources: 2 },
+          },
+        }),
+      }),
+    );
+
+    expect(events.runsById["research-progress"].progress).toMatchObject({
+      milestone: "sources-gathered",
+      at: milestoneAt,
+    });
+    expect(events.runsById["research-progress"].milestones).toEqual([
+      {
+        name: "sources-gathered",
+        sequence: 1,
+        at: milestoneAt,
+        data: { sources: 2 },
+      },
+    ]);
+  });
+
   it("ignores non-tool and malformed socket messages", () => {
     const mock = createMockAgent();
     const events = new AgentToolEvents({ agent: mock.agent });

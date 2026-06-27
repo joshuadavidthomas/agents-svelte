@@ -445,6 +445,18 @@ describe("createAgentChat — setMessages", () => {
 
     expect(findSent(mock, MessageType.CF_AGENT_CHAT_MESSAGES)).toBeUndefined();
   });
+
+  it("can disable setMessages server sync by default", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { syncMessagesToServer: false });
+    await waitForChatInitialized(chat);
+
+    chat.setMessages([{ id: "local", role: "user", parts: [{ type: "text", text: "local" }] }]);
+    flushSync();
+
+    expect(chat.messages.map((message) => message.id)).toEqual(["local"]);
+    expect(findSent(mock, MessageType.CF_AGENT_CHAT_MESSAGES)).toBeUndefined();
+  });
 });
 
 describe("createAgentChat — clearHistory", () => {

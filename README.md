@@ -20,16 +20,16 @@ npm install agents-svelte
 For chat:
 
 ```bash
-npm install @ai-sdk/svelte @cloudflare/ai-chat@^0.8.4
+npm install @ai-sdk/svelte @cloudflare/ai-chat@^0.9.0
 ```
 
 For voice:
 
 ```bash
-npm install @cloudflare/voice@^0.2.1
+npm install @cloudflare/voice@^0.3.3
 ```
 
-This version expects `agents@^0.15.0`, `@cloudflare/ai-chat@>=0.8.4`, and `@cloudflare/voice@>=0.2.1`.
+This version expects `agents@^0.17.0`, `@cloudflare/ai-chat@>=0.9.0`, and `@cloudflare/voice@>=0.3.3`.
 
 Use this package from a Svelte 5 app built with Vite or another toolchain that supports `.svelte.ts` files.
 
@@ -214,6 +214,8 @@ Notes:
 - The primary readiness signal is `agent.identity.identified`; imperative code can also `await agent.ready` after `.connect()`.
 - State and identity transitions are reactive fields. Use `onIdentity` or `onIdentityChange` only for side effects outside Svelte reactivity.
 - `agent.call(...)` accepts Cloudflare's RPC options, including `{ timeout, stream }`.
+- Non-streaming RPC calls use the upstream 30s default timeout unless `defaultCallTimeout` or a per-call `timeout` overrides it. Pass `0` to disable.
+- Terminal WebSocket closes are exposed as `agent.connectionError` and do not reconnect automatically. Use `onConnectionError` only for side effects.
 - `agent.socket` is `null` before `.connect()` and after explicit `.close()`.
 - Passing `agent: "ChatAgent"` is normalized to the route segment `chat-agent`.
 
@@ -274,6 +276,8 @@ For async query functions, `Agent` waits for the query to resolve before opening
 Read `chat.messages`, `chat.status`, `chat.error`, `chat.activity`, and `chat.isBusy` directly in markup. `chat.activity` is the primary Svelte state for rendering chat UI and can be `idle`, `submitted`, `streaming`, `recovering`, `tool-continuation`, or `awaiting-tools`. `chat.isBusy` is true whenever sending should usually be disabled. `chat.isStreaming` stays stream-focused: it covers active client/server streams, tool continuations, and running client-side tool work, but not recovery or tool calls that are simply waiting for user action. Use `chat.isBusy` or `chat.activity.kind === "recovering"` when recovery should block UI. Convenience getters like `chat.isRecovering` and `chat.isToolContinuation` remain available for focused checks. Use `chat.sendMessage(...)`, `chat.stop()`, `chat.clearHistory()`, and `chat.addToolApprovalResponse(...)` from event handlers.
 
 By default, local stream cleanup does not cancel a running server turn, so the turn can resume after reconnect. Call `chat.stop()` to cancel the server turn, or pass `cancelOnClientAbort: true` to restore cancellation on client cleanup.
+
+`chat.setMessages(...)` syncs the full transcript back to the Agent by default. Pass `syncMessagesToServer: false` when the server owns richer transcript state and the client message list is only a projection.
 
 Tool call handles expose `toolName`, `input`, `addOutput(...)`, and `run(...)`. Repeated `run(...)` calls share the same in-flight execution.
 
@@ -342,7 +346,7 @@ On the server, use `createToolsFromClientSchemas(options.clientTools)` to expose
 <button onclick={() => voice.endCall()}>End call</button>
 ```
 
-Read `voice.status`, `voice.transcript`, `voice.interimTranscript`, `voice.audioLevel`, and `voice.isMuted` in markup. Use `voice.startCall()`, `voice.endCall()`, `voice.toggleMute()`, and `voice.sendText(text)` from event handlers.
+Read `voice.status`, `voice.transcript`, `voice.interimTranscript`, `voice.audioLevel`, `voice.isMuted`, and `voice.outputDeviceError` in markup. Use `voice.startCall()`, `voice.endCall()`, `voice.toggleMute()`, `voice.sendText(text)`, and `voice.setOutputDevice(deviceId)` from event handlers.
 
 Pass `enabled: false` to delay creating and connecting the voice client, then call `voice.setEnabled(true)` when the voice transport should start.
 

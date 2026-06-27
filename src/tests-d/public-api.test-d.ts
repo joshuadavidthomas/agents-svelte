@@ -3,6 +3,7 @@ import type * as ChatModule from "../chat.ts";
 import type * as VoiceModule from "../voice.ts";
 import type {
   Agent,
+  AgentConnectionError,
   CreateAgentOptions,
   Identity,
   IdentityChange,
@@ -18,6 +19,7 @@ import type {
   AgentToolEventState,
   AgentToolEvents,
   AgentToolInterruptedReason,
+  AgentToolRunPart,
   AgentToolRunState,
   ClientToolSchema,
   CreateAgentChatOptions,
@@ -71,6 +73,7 @@ type _ChatExportsAreIntentional = Expect<Equal<ChatExport, ExpectedChatExports>>
 type _VoiceExportsAreIntentional = Expect<Equal<VoiceExport, ExpectedVoiceExports>>;
 
 declare const agent: Agent;
+declare const agentConnectionError: AgentConnectionError;
 declare const identity: Identity;
 declare const stateUpdate: StateUpdate<unknown>;
 declare const identityChange: IdentityChange;
@@ -83,6 +86,7 @@ declare const agentToolEvent: AgentToolEvent;
 declare const agentToolEventMessage: AgentToolEventMessage;
 declare const agentToolEventState: AgentToolEventState;
 declare const agentToolInterruptedReason: AgentToolInterruptedReason;
+declare const agentToolRunPart: AgentToolRunPart;
 declare const agentToolRunState: AgentToolRunState;
 declare const clientToolSchema: ClientToolSchema;
 declare const sendOptions: PrepareSendMessagesRequestOptions;
@@ -102,6 +106,7 @@ declare const voiceClientEvent: VoiceClientEvent;
 declare const voiceClientEventMap: VoiceClientEventMap;
 
 void agent;
+void agentConnectionError;
 void identity;
 void stateUpdate;
 void identityChange;
@@ -114,6 +119,7 @@ void agentToolEvent;
 void agentToolEventMessage;
 void agentToolEventState;
 void agentToolInterruptedReason;
+void agentToolRunPart;
 void agentToolRunState;
 void clientToolSchema;
 void sendOptions;
@@ -133,6 +139,13 @@ void voiceClientEvent;
 void voiceClientEventMap;
 
 const agentOptions: CreateAgentOptions = { agent: "ChatAgent" };
+const agentOptionsWithConnectionError: CreateAgentOptions = {
+  agent: "ChatAgent",
+  onConnectionError: (error) => {
+    const code: number = error.code;
+    void code;
+  },
+};
 const chatOptions = {} as CreateAgentChatOptions;
 const toolEventsOptions: CreateAgentToolEventsOptions = { agent };
 const voiceInputOptions: VoiceInputOptions = {
@@ -141,6 +154,7 @@ const voiceInputOptions: VoiceInputOptions = {
 };
 const outputOptions: ToolCallOutputOptions = { output: { ok: true } };
 void agentOptions;
+void agentOptionsWithConnectionError;
 void chatOptions;
 void toolEventsOptions;
 void voiceInputOptions;

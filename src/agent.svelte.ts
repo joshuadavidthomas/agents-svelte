@@ -1,5 +1,6 @@
 import { onDestroy, onMount, untrack } from "svelte";
 import type {
+  AgentConnectionError,
   AgentPromiseReturnType,
   AgentStub,
   CallOptions,
@@ -8,10 +9,18 @@ import type {
   StreamOptions,
   UntypedAgentStub,
 } from "agents/client";
-import { AgentClient, createStubProxy } from "agents/client";
+import {
+  AgentClient,
+  AgentConnectionError as AgentConnectionErrorCtor,
+  DEFAULT_CALL_TIMEOUT_MS,
+  createStubProxy,
+  isTerminalCloseEvent,
+} from "agents/client";
 import type { MCPServersState, RPCRequest, RPCResponse } from "agents";
 import { MessageType } from "agents/types";
 import { camelCaseToKebabCase } from "./utils.ts";
+
+export type { AgentConnectionError } from "agents/client";
 
 export type QueryObject = Record<string, string | null>;
 export type QueryStatus = "idle" | "loading" | "ready" | "error";
@@ -96,6 +105,10 @@ export interface CreateAgentOptions {
   id?: string;
   prefix?: string;
   sub?: ReadonlyArray<SubAgentRoute>;
+  defaultCallTimeout?: number;
+  shouldReconnectOnClose?: (event: CloseEvent) => boolean;
+  /** Called when the server closes the socket with a terminal code. */
+  onConnectionError?: (error: AgentConnectionError) => void;
   /** Called when the server sends the agent's identity on connect. */
   onIdentity?: (name: string, agent: string) => void;
   /** Called when the server changes identity on reconnect or reroute. */
@@ -158,6 +171,7 @@ export class Agent<AgentT = unknown, State = unknown> {
   queryError = $state<Error | null>(null);
   stateError = $state<string | null>(null);
   mcp = $state<MCPServersState | null>(null);
+  connectionError = $state<AgentConnectionError | null>(null);
   lastStateUpdate = $state<StateUpdate<State> | null>(null);
   lastIdentityChange = $state<IdentityChange | null>(null);
 
@@ -391,6 +405,8 @@ export class Agent<AgentT = unknown, State = unknown> {
       protocol: options.protocol,
       protocols: options.protocols,
       query,
+      defaultCallTimeout: options.defaultCallTimeout,
+      shouldReconnectOnClose: options.shouldReconnectOnClose,
       onIdentityChange: () => {},
     };
     const routingOpts = options.basePath
@@ -455,6 +471,7 @@ export class Agent<AgentT = unknown, State = unknown> {
 
   #handleOpen = (_e: Event) => {
     this.connected = true;
+    this.connectionError = null;
   };
 
   #handleMessage = (e: MessageEvent) => {
@@ -531,7 +548,13 @@ export class Agent<AgentT = unknown, State = unknown> {
       case MessageType.RPC: {
         const r = msg as unknown as RPCResponse;
         const p = this.#pending.get(r.id);
-        if (!p) return;
+        if (!p) {
+          console.warn(
+            `[agents-svelte] Discarded an RPC response with no matching pending call (id "${r.id}"). ` +
+              "The call likely timed out or was rejected when its connection closed before the response arrived.",
+          );
+          return;
+        }
         if (!r.success) {
           this.#pending.delete(r.id);
           p.reject(new Error(r.error));
@@ -555,10 +578,21 @@ export class Agent<AgentT = unknown, State = unknown> {
     }
   };
 
-  #handleClose = (_e: CloseEvent) => {
+  #handleClose = (event: CloseEvent) => {
     this.#markClosed();
+    const shouldReconnect = this.#shouldReconnectAfterClose(event);
+    if (!shouldReconnect && isTerminalCloseEvent(event)) {
+      const error = new AgentConnectionErrorCtor(event);
+      this.connectionError = error;
+      this.#options.onConnectionError?.(error);
+    }
 
-    if (typeof this.#options.query !== "function" || !this.#started || !this.#connection.socket) {
+    if (
+      !shouldReconnect ||
+      typeof this.#options.query !== "function" ||
+      !this.#started ||
+      !this.#connection.socket
+    ) {
       return;
     }
 
@@ -572,6 +606,10 @@ export class Agent<AgentT = unknown, State = unknown> {
   };
 
   #handleError = (_e: Event) => {};
+
+  #shouldReconnectAfterClose(event: CloseEvent): boolean {
+    return (this.#options.shouldReconnectOnClose?.(event) ?? true) && !isTerminalCloseEvent(event);
+  }
 
   #detachSocket(socket: AgentClient<AgentT, State>, close: boolean): void {
     socket.removeEventListener("message", this.#handleMessage);
@@ -659,6 +697,11 @@ export class Agent<AgentT = unknown, State = unknown> {
 
   #call = <T>(method: string, args: unknown[] = [], options?: AgentCallOptions): Promise<T> => {
     return new Promise<T>((resolve, reject) => {
+      if (this.connectionError) {
+        reject(new Error("Connection closed"));
+        return;
+      }
+
       const id = crypto.randomUUID();
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       const isLegacyFormat =
@@ -667,15 +710,16 @@ export class Agent<AgentT = unknown, State = unknown> {
         ? (options as StreamOptions)
         : (options as CallOptions | undefined)?.stream;
       const timeout = isLegacyFormat ? undefined : (options as CallOptions | undefined)?.timeout;
+      const effectiveTimeout = this.#resolveCallTimeout({ stream, timeout });
 
-      if (timeout) {
+      if (effectiveTimeout) {
         timeoutId = setTimeout(() => {
           const pending = this.#pending.get(id);
           this.#pending.delete(id);
-          const errorMessage = `RPC call to ${method} timed out after ${timeout}ms`;
+          const errorMessage = `RPC call to ${method} timed out after ${effectiveTimeout}ms`;
           pending?.stream?.onError?.(errorMessage);
           reject(new Error(errorMessage));
-        }, timeout);
+        }, effectiveTimeout);
       }
 
       this.#pending.set(id, {
@@ -705,6 +749,24 @@ export class Agent<AgentT = unknown, State = unknown> {
       }
     });
   };
+
+  #resolveCallTimeout({
+    stream,
+    timeout,
+  }: {
+    stream?: StreamOptions;
+    timeout?: number;
+  }): number | undefined {
+    if (timeout !== undefined) {
+      return timeout;
+    }
+
+    if (stream) {
+      return undefined;
+    }
+
+    return this.#options.defaultCallTimeout ?? DEFAULT_CALL_TIMEOUT_MS;
+  }
 }
 
 export function createAgent<AgentT = unknown, State = unknown>(

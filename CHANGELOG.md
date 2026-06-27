@@ -18,6 +18,23 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Added `agent.connectionError` and `onConnectionError` for terminal WebSocket closes.
+- Added `syncMessagesToServer: false` to let chat clients keep local projections without pushing full transcripts back to the Agent.
+- Added voice output-device support with `voice.setOutputDevice(...)` and `voice.outputDeviceError`.
+- Added typed Agent tool progress and milestone event state.
+
+### Changed
+
+- Updated Cloudflare Agents SDK package requirements to `agents@^0.17.0`, `@cloudflare/ai-chat@>=0.9.0`, and `@cloudflare/voice@>=0.3.3`.
+- Matched upstream non-streaming RPC behavior with a 30s default timeout, configurable through `defaultCallTimeout` or per-call `timeout`.
+- Treated terminal WebSocket closes as final connection errors instead of reconnecting automatically.
+
+### Fixed
+
+- Settled local chat sends when a resumed stream replaces the same request stream. Thanks, @cgrdavies.
+
 ## [0.4.0]
 
 ### Added

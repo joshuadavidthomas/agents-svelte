@@ -44,3 +44,9 @@ const chatWithClientTools: CreateAgentChatOptions = {
   clientTools: () => [{ name: "getLocation", parameters: { type: "object" } }],
 };
 void chatWithClientTools;
+
+const localProjectionChat: CreateAgentChatOptions = {
+  agent,
+  syncMessagesToServer: false,
+};
+void localProjectionChat;

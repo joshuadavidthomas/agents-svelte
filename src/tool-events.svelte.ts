@@ -7,6 +7,7 @@ import {
   type AgentToolEventState,
   type AgentToolRunState,
 } from "agents/chat";
+import type { AgentToolRunPart } from "agents";
 import type { AgentToolInterruptedReason } from "agents/agent-tools";
 import type { Agent } from "./agent.svelte.ts";
 
@@ -23,8 +24,8 @@ function agentToolDedupeKey(message: AgentToolEventMessage): string {
   return [message.parentToolCallId ?? "", message.event.runId, String(message.sequence)].join("\0");
 }
 
-export class AgentToolEvents {
-  #state = $state<AgentToolEventState>(createAgentToolEventState());
+export class AgentToolEvents<Part extends AgentToolRunPart = AgentToolRunPart> {
+  #state = $state<AgentToolEventState<Part>>(createAgentToolEventState<Part>());
   readonly #seen = new Set<string>();
   readonly #agent: Agent<unknown, unknown>;
   #socket: AgentToolEventsSocket | null = null;
@@ -33,15 +34,15 @@ export class AgentToolEvents {
     this.#agent = options.agent;
   }
 
-  get runsById(): Record<string, AgentToolRunState> {
+  get runsById(): Record<string, AgentToolRunState<Part>> {
     return this.#state.runsById;
   }
 
-  get runsByToolCallId(): Record<string, AgentToolRunState[]> {
+  get runsByToolCallId(): Record<string, AgentToolRunState<Part>[]> {
     return this.#state.runsByToolCallId;
   }
 
-  get unboundRuns(): AgentToolRunState[] {
+  get unboundRuns(): AgentToolRunState<Part>[] {
     return this.#state.unboundRuns;
   }
 
@@ -65,10 +66,10 @@ export class AgentToolEvents {
 
   resetLocalState(): void {
     this.#seen.clear();
-    this.#state = createAgentToolEventState();
+    this.#state = createAgentToolEventState<Part>();
   }
 
-  getRunsForToolCall(toolCallId: string): AgentToolRunState[] {
+  getRunsForToolCall(toolCallId: string): AgentToolRunState<Part>[] {
     return this.#state.runsByToolCallId[toolCallId] ?? [];
   }
 
@@ -103,7 +104,7 @@ export class AgentToolEvents {
     }
 
     this.#seen.add(key);
-    this.#state = applyAgentToolEvent(this.#state, message);
+    this.#state = applyAgentToolEvent<Part>(this.#state, message);
   };
 }
 
@@ -125,5 +126,6 @@ export type {
   AgentToolEventMessage,
   AgentToolEventState,
   AgentToolInterruptedReason,
+  AgentToolRunPart,
   AgentToolRunState,
 };
