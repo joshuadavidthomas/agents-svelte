@@ -43,6 +43,21 @@ vi.mock("partysocket", () => ({
 
 vi.mock("agents/client", () => ({
   AgentClient: MockPartySocket,
+  AgentConnectionError: class AgentConnectionError extends Error {
+    code: number;
+    reason: string;
+    wasClean: boolean;
+
+    constructor(event: CloseEvent) {
+      const reason = event.reason || `WebSocket closed with code ${event.code}`;
+      super(`Agent connection closed: ${reason}`);
+      this.name = "AgentConnectionError";
+      this.code = event.code;
+      this.reason = event.reason;
+      this.wasClean = event.wasClean;
+    }
+  },
+  DEFAULT_CALL_TIMEOUT_MS: 30000,
   createStubProxy: (call: (method: string, args: unknown[]) => unknown) =>
     new Proxy(
       {},
@@ -53,6 +68,8 @@ vi.mock("agents/client", () => ({
         },
       },
     ),
+  isTerminalCloseEvent: (event: CloseEvent) =>
+    event.code === 1008 || (event.code >= 4000 && event.code <= 4999),
 }));
 
 import { Agent, type CreateAgentOptions } from "../agent.svelte.ts";
@@ -336,6 +353,83 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     }
   });
 
+  it("applies the default non-streaming RPC timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const agent = makeAgent({
+        agent: "TestCallableAgent",
+        host: "localhost:8787",
+        protocol: "ws",
+        defaultCallTimeout: 25,
+      });
+
+      const pending = agent.call("slow", []);
+
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(pending).rejects.toThrow("RPC call to slow timed out after 25ms");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not apply the default timeout to streaming RPC calls", async () => {
+    vi.useFakeTimers();
+    try {
+      const agent = makeAgent({
+        agent: "TestCallableAgent",
+        host: "localhost:8787",
+        protocol: "ws",
+        defaultCallTimeout: 25,
+      });
+      const socket = latestSocket();
+
+      const pending = agent.call("slowStream", [], { stream: { onChunk: vi.fn() } });
+      await vi.advanceTimersByTimeAsync(25);
+
+      const request = JSON.parse(socket.sent[0]) as { id: string };
+      dispatchMessage(socket, {
+        type: MessageType.RPC,
+        id: request.id,
+        success: true,
+        done: true,
+        result: "ok",
+      });
+
+      await expect(pending).resolves.toBe("ok");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("records terminal connection errors and stops new RPC calls", async () => {
+    const onConnectionError = vi.fn();
+    const agent = makeAgent({
+      agent: "TestCallableAgent",
+      host: "localhost:8787",
+      protocol: "ws",
+      onConnectionError,
+    });
+    const socket = latestSocket();
+
+    socket.dispatchEvent(
+      new CloseEvent("close", {
+        code: 1008,
+        reason: "unauthorized",
+        wasClean: true,
+      }),
+    );
+
+    expect(agent.connectionError).toMatchObject({
+      name: "AgentConnectionError",
+      code: 1008,
+      reason: "unauthorized",
+      wasClean: true,
+    });
+    expect(onConnectionError).toHaveBeenCalledWith(agent.connectionError);
+    await expect(agent.call("afterTerminal", [])).rejects.toThrow("Connection closed");
+  });
+
   it("keeps the socket reference across transient close events for PartySocket reconnects", async () => {
     const agent = makeAgent({
       agent: "TestCallableAgent",
@@ -475,6 +569,36 @@ describe("createAgent — supplemental mocked lifecycle cases", () => {
     });
     expect(MockPartySocket.instances[1].options.query).toEqual({ token: "token-2" });
     expect(MockPartySocket.instances[0].close).toHaveBeenCalled();
+  });
+
+  it("does not refresh async query params after a terminal close", async () => {
+    const queryFn = vi.fn(async () => ({ token: "token" }));
+    const agent = new Agent({
+      agent: "TestStateAgent",
+      name: "query-terminal-close",
+      host: "localhost:8787",
+      protocol: "ws",
+      query: queryFn,
+    });
+    cleanups.push(() => agent.close());
+
+    agent.connect();
+    await vi.waitFor(() => {
+      expect(MockPartySocket.instances).toHaveLength(1);
+    });
+
+    MockPartySocket.instances[0].dispatchEvent(
+      new CloseEvent("close", {
+        code: 1008,
+        reason: "unauthorized",
+      }),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(MockPartySocket.instances).toHaveLength(1);
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    expect(agent.connectionError?.code).toBe(1008);
   });
 
   it("ignores stale async query results when a newer refresh starts", async () => {

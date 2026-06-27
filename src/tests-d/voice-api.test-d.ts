@@ -10,6 +10,10 @@ void voiceInputOptions;
 declare const voice: VoiceAgent;
 declare const input: VoiceInput;
 
+const outputDeviceError: string | null = voice.outputDeviceError;
+void outputDeviceError;
+void voice.setOutputDevice("speaker-id");
+
 // @ts-expect-error underlying VoiceClient is intentionally not public
 void voice.client;
 

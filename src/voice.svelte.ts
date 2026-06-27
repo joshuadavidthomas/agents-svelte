@@ -56,6 +56,7 @@ export class VoiceAgent {
   #isMuted = $state(false);
   #connected = $state(false);
   #error = $state<string | null>(null);
+  #outputDeviceError = $state<string | null>(null);
   #lastCustomMessage = $state<unknown>(null);
 
   constructor(options: VoiceAgentOptions) {
@@ -109,6 +110,9 @@ export class VoiceAgent {
   get error(): string | null {
     return this.#error;
   }
+  get outputDeviceError(): string | null {
+    return this.#outputDeviceError;
+  }
   get lastCustomMessage(): unknown {
     return this.#lastCustomMessage;
   }
@@ -127,6 +131,9 @@ export class VoiceAgent {
   }
   sendJSON(data: Record<string, unknown>): void {
     this.#client?.sendJSON(data);
+  }
+  setOutputDevice(outputDeviceId?: string): Promise<void> {
+    return this.#client?.setOutputDevice(outputDeviceId) ?? Promise.resolve();
   }
 
   close(): void {
@@ -147,6 +154,7 @@ export class VoiceAgent {
     client.addEventListener("mutechange", this.#syncMute);
     client.addEventListener("connectionchange", this.#syncConnection);
     client.addEventListener("error", this.#syncError);
+    client.addEventListener("outputdeviceerror", this.#syncOutputDeviceError);
     client.addEventListener("custommessage", this.#syncCustomMessage);
     this.#client = client;
     this.#syncAll();
@@ -166,6 +174,7 @@ export class VoiceAgent {
       client.removeEventListener("mutechange", this.#syncMute);
       client.removeEventListener("connectionchange", this.#syncConnection);
       client.removeEventListener("error", this.#syncError);
+      client.removeEventListener("outputdeviceerror", this.#syncOutputDeviceError);
       client.removeEventListener("custommessage", this.#syncCustomMessage);
       client.disconnect();
     }
@@ -181,6 +190,7 @@ export class VoiceAgent {
     this.#syncMute();
     this.#syncConnection();
     this.#syncError();
+    this.#syncOutputDeviceError();
     this.#syncCustomMessage();
   }
 
@@ -193,6 +203,7 @@ export class VoiceAgent {
     this.#isMuted = false;
     this.#connected = false;
     this.#error = null;
+    this.#outputDeviceError = null;
     this.#lastCustomMessage = null;
   }
 
@@ -219,6 +230,9 @@ export class VoiceAgent {
   };
   #syncError = (): void => {
     this.#error = this.#client?.error ?? null;
+  };
+  #syncOutputDeviceError = (): void => {
+    this.#outputDeviceError = this.#client?.outputDeviceError ?? null;
   };
   #syncCustomMessage = (): void => {
     this.#lastCustomMessage = this.#client?.lastCustomMessage ?? null;

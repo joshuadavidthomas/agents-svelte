@@ -6,6 +6,18 @@ allowBuilds:
   sharp: true
   workerd: true
 
+minimumReleaseAgeExclude:
+  - "@ai-sdk/gateway@3.0.138"
+  - "@ai-sdk/provider-utils@4.0.32"
+  - "@ai-sdk/provider@3.0.12"
+  - "@ai-sdk/react@3.0.215"
+  - "@ai-sdk/svelte@4.0.213"
+  - "@cloudflare/ai-chat@0.9.0"
+  - "@cloudflare/codemode@0.4.2"
+  - "@cloudflare/voice@0.3.3"
+  - agents@0.17.0
+  - ai@6.0.213
+
 packages:
   - .
   - examples/*

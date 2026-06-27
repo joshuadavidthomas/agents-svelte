@@ -9,8 +9,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
-    "@cloudflare/voice": ">=0.2.1 <1.0.0",
-    "agents": ">=0.15.0 <1.0.0",
+    "@cloudflare/voice": ">=0.3.3 <1.0.0",
+    "agents": ">=0.17.0 <1.0.0",
     "agents-svelte": "workspace:*",
     "partysocket": "^1.1.18",
     "svelte": "^5.0.0"

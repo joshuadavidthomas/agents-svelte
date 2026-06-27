@@ -163,6 +163,14 @@ export interface CreateAgentChatOptions<M extends UIMessage = UIMessage> extends
    * @default false
    */
   cancelOnClientAbort?: boolean;
+  /**
+   * Whether `setMessages` should send the full client transcript to the server.
+   * Disable for server-authoritative hosts where local messages are projections
+   * of richer server state.
+   *
+   * @default true
+   */
+  syncMessagesToServer?: boolean;
 }
 
 function prependMissingHydratedMessages<M extends UIMessage>(hydrated: M[], current: M[]): M[] {
@@ -606,7 +614,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     if (messages.length === 0) {
       this.#historyClearSeq++;
     }
-    if (options?.skipServerSync) return;
+    if (options?.skipServerSync || this.#options.syncMessagesToServer === false) return;
     this.#transport.sendMessagesSnapshot(messages);
   }
 

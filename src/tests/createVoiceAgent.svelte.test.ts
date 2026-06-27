@@ -32,6 +32,7 @@ function createFakeTransport(): VoiceTransport & { connected: boolean } {
   return transport;
 }
 
+const { VoiceClient } = await import("@cloudflare/voice/client");
 const { VoiceAgent } = await import("../voice.svelte.ts");
 type VoiceAgentInstance = InstanceType<typeof VoiceAgent>;
 
@@ -211,6 +212,18 @@ describe("VoiceAgent", () => {
         payload: { ok: true },
       }),
     );
+  });
+
+  it("proxies output device changes to VoiceClient", async () => {
+    const setOutputDevice = vi
+      .spyOn(VoiceClient.prototype, "setOutputDevice")
+      .mockResolvedValue(undefined);
+    const v = makeVoice();
+    await vi.waitFor(() => expect(v.connected).toBe(true));
+
+    await v.setOutputDevice("speaker-1");
+
+    expect(setOutputDevice).toHaveBeenCalledWith("speaker-1");
   });
 
   it("closes the underlying connection", async () => {
