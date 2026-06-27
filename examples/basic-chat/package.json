@@ -15,14 +15,14 @@
     "agents-svelte": "workspace:*",
     "ai": "^6.0.213",
     "partysocket": "^1.1.18",
-    "svelte": "^5.0.0",
+    "svelte": "^5.56.4",
     "workers-ai-provider": "^3.1.14"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.40.0",
     "@cloudflare/workers-types": "^4.20260607.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
-    "svelte-check": "^4.3.4",
+    "svelte-check": "^4.7.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "wrangler": "^4.98.0"
