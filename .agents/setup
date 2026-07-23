@@ -24,11 +24,16 @@ fi
 echo "==> Installing Node.js 22"
 "$mise_bin" install node@22
 "$mise_bin" use --global node@22
-eval "$("$mise_bin" activate bash)"
+eval "$("$mise_bin" env --shell bash)"
 
 echo "==> Activating pnpm 11.1.1"
 corepack enable
 corepack prepare pnpm@11.1.1 --activate
+"$mise_bin" reshim
+
+# Amp commands inherit ~/.local/bin even when their shell does not load a profile.
+ln -sfn "$HOME/.local/share/mise/shims/node" "$HOME/.local/bin/node"
+ln -sfn "$HOME/.local/share/mise/shims/pnpm" "$HOME/.local/bin/pnpm"
 
 echo "==> Installing workspace dependencies"
 cd "$repo_root"
