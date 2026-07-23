@@ -18,6 +18,10 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Fixed
+
+- Settle server-stream activity for terminal frames from unobserved replays without treating live `replayComplete` frames as terminal or clearing unrelated recovery state. Thanks, @cgrdavies.
+
 ## [0.5.0]
 
 ### Added
