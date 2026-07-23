@@ -21,6 +21,11 @@ and this project attempts to adhere to [Semantic Versioning](https://semver.org/
 ### Fixed
 
 - Settle server-stream activity for terminal frames from unobserved replays without treating live `replayComplete` frames as terminal or clearing unrelated recovery state. Thanks, @cgrdavies.
+- Reconcile stale stream activity from correlated resume responses while preserving live continuation ownership and in-flight direct streams across reconnects. Thanks, @cgrdavies.
+
+### Changed
+
+- Updated Cloudflare Agents SDK requirements to `agents@^0.18.0` and `@cloudflare/ai-chat@>=0.9.4`, including correlated resume probes and pending pre-stream turns.
 
 ## [0.5.0]
 

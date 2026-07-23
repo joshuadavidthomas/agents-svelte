@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { createSubscriber } from "svelte/reactivity";
 import type { Agent } from "../agent.svelte.ts";
 
 export interface MockAgent {
@@ -11,6 +12,13 @@ export interface MockAgent {
   dispatchServerMessage: (data: unknown) => void;
   /** Dispatch a close event. */
   dispatchClose: () => void;
+  /** Dispatch an open event after a physical reconnect. */
+  dispatchOpen: () => void;
+  /** Replace the current socket with an independent open socket. */
+  replaceSocket: () => {
+    dispatchPreviousServerMessage: (data: unknown) => void;
+  };
+  setReadyState: (state: number) => void;
   send: ReturnType<typeof vi.fn>;
 }
 
@@ -18,14 +26,21 @@ export function createMockAgent(params?: {
   name?: string;
   agent?: string;
   url?: string;
+  readyState?: number;
 }): MockAgent {
   const name = params?.name ?? "mock-room";
   const agentKebab = params?.agent ?? "chat";
   const url = params?.url ?? `ws://localhost:3000/agents/${agentKebab}/${name}`;
 
-  const target = new EventTarget();
   const sent: string[] = [];
   const sentMessages: Array<Record<string, unknown>> = [];
+  let notifySocketChanged: (() => void) | undefined;
+  const subscribeSocket = createSubscriber((update) => {
+    notifySocketChanged = update;
+    return () => {
+      notifySocketChanged = undefined;
+    };
+  });
 
   const send = vi.fn((payload: string) => {
     sent.push(payload);
@@ -36,18 +51,36 @@ export function createMockAgent(params?: {
     }
   });
 
-  const socket = {
-    addEventListener: target.addEventListener.bind(target),
-    removeEventListener: target.removeEventListener.bind(target),
-    dispatchEvent: target.dispatchEvent.bind(target),
-    send,
-    close: vi.fn(),
-    readyState: 1,
-    _pkurl: url,
-  } as unknown as Agent<unknown, unknown>["socket"];
+  function createSocket(initialReadyState = 1) {
+    const target = new EventTarget();
+    let readyState = initialReadyState;
+    const socket = {
+      addEventListener: target.addEventListener.bind(target),
+      removeEventListener: target.removeEventListener.bind(target),
+      dispatchEvent: target.dispatchEvent.bind(target),
+      send,
+      close: vi.fn(),
+      get readyState() {
+        return readyState;
+      },
+      _pkurl: url,
+    } as unknown as Agent<unknown, unknown>["socket"];
+    return {
+      socket,
+      target,
+      setReadyState: (state: number) => {
+        readyState = state;
+      },
+    };
+  }
+
+  let current = createSocket(params?.readyState ?? 1);
 
   const agent = {
-    socket,
+    get socket() {
+      subscribeSocket();
+      return current.socket;
+    },
     path: [{ agent: agentKebab, name }],
     state: undefined,
     identity: { name, agent: agentKebab, identified: true },
@@ -65,11 +98,17 @@ export function createMockAgent(params?: {
 
   function dispatchServerMessage(data: unknown) {
     const payload = typeof data === "string" ? data : JSON.stringify(data);
-    target.dispatchEvent(new MessageEvent("message", { data: payload }));
+    current.target.dispatchEvent(new MessageEvent("message", { data: payload }));
   }
 
   function dispatchClose() {
-    target.dispatchEvent(new CloseEvent("close"));
+    current.setReadyState(3);
+    current.target.dispatchEvent(new CloseEvent("close"));
+  }
+
+  function dispatchOpen() {
+    current.setReadyState(1);
+    current.target.dispatchEvent(new Event("open"));
   }
 
   return {
@@ -78,6 +117,21 @@ export function createMockAgent(params?: {
     sentMessages,
     dispatchServerMessage,
     dispatchClose,
+    dispatchOpen,
+    replaceSocket: () => {
+      const previous = current;
+      current = createSocket();
+      notifySocketChanged?.();
+      return {
+        dispatchPreviousServerMessage: (data: unknown) => {
+          const payload = typeof data === "string" ? data : JSON.stringify(data);
+          previous.target.dispatchEvent(new MessageEvent("message", { data: payload }));
+        },
+      };
+    },
+    setReadyState: (state) => {
+      current.setReadyState(state);
+    },
     send,
   };
 }

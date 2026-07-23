@@ -1,6 +1,10 @@
 import { onDestroy, onMount } from "svelte";
 import { Chat } from "@ai-sdk/svelte";
-import { AgentChatTransport, type AgentChatTransportEvent } from "./chat-transport.ts";
+import {
+  AgentChatTransport,
+  type AgentChatConnection,
+  type AgentChatTransportEvent,
+} from "./chat-transport.ts";
 import { broadcastTransition, type BroadcastStreamState, type ClientToolSchema } from "agents/chat";
 import { isToolUIPart, getToolName, type ChatInit, type UIMessage } from "ai";
 import { nanoid } from "nanoid";
@@ -317,8 +321,12 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   #historyClearSeq = 0;
   #serverSnapshotSeq = 0;
   #toolContinuationGeneration = 0;
+  #toolContinuationPending = false;
   #attachedSocket: unknown = null;
   #resumedSocket: unknown = null;
+  #resumeOperation: Promise<void> | null = null;
+  #queuedOrdinaryResume = false;
+  readonly #baseResumeStream: () => Promise<void>;
   readonly #streamState: { current: BroadcastStreamState } = {
     current: { status: "idle" } as BroadcastStreamState,
   };
@@ -342,16 +350,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
 
     const transport = new AgentChatTransport<M>({
       getConnection: () => {
-        const socket = agent.socket;
-        return socket
-          ? {
-              send: (data: string) => socket.send(data),
-              addEventListener: (type: string, listener: (event: MessageEvent) => void) =>
-                socket.addEventListener(type, listener as EventListener),
-              removeEventListener: (type: string, listener: (event: MessageEvent) => void) =>
-                socket.removeEventListener(type, listener as EventListener),
-            }
-          : null;
+        return agent.socket as unknown as AgentChatConnection | null;
       },
       cancelOnClientAbort: options.cancelOnClientAbort,
       prepareBody: async ({ messages: msgs, trigger, messageId }) => {
@@ -395,6 +394,9 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#transport = transport;
     this.#autoContinueAfterToolResult = autoContinueAfterToolResult;
     this.#sendAutomaticallyWhen = sendAutomaticallyWhen;
+
+    this.#baseResumeStream = this.resumeStream.bind(this);
+    this.resumeStream = (() => this.#scheduleResume("ordinary")) as typeof this.resumeStream;
 
     const baseStop = this.stop.bind(this) as Chat<M>["stop"];
     this.stop = (async () => {
@@ -460,7 +462,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
             this.#options.resume !== false
           ) {
             this.#resumedSocket = socket;
-            void this.resumeStream().catch(() => {});
+            void this.#scheduleResume("ordinary", true).catch(() => {});
           }
         }
       });
@@ -661,19 +663,50 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
   }
 
   #startToolContinuation(): void {
-    if (this.#closed) {
+    if (this.#closed || this.#toolContinuationPending) {
       return;
     }
 
     const generation = ++this.#toolContinuationGeneration;
+    this.#toolContinuationPending = true;
     this.#addToolContinuation(generation);
     this.#protectCurrentAssistantTail();
-    this.#transport.prepareToolContinuation();
-    void this.resumeStream()
+    void this.#scheduleResume("tool")
       .catch(() => {})
       .finally(() => {
         this.#removeToolContinuation(generation);
+        if (generation === this.#toolContinuationGeneration) {
+          this.#toolContinuationPending = false;
+        }
       });
+  }
+
+  #scheduleResume(purpose: "ordinary" | "tool", queueOrdinary = false): Promise<void> {
+    if (this.#closed) return Promise.resolve();
+    if (purpose === "ordinary" && this.#resumeOperation) {
+      if (queueOrdinary) this.#queuedOrdinaryResume = true;
+      return this.#resumeOperation;
+    }
+    if (purpose === "tool" && this.#resumeOperation) {
+      const generation = this.#toolContinuationGeneration;
+      return this.#resumeOperation.then(() => {
+        if (this.#closed || generation !== this.#toolContinuationGeneration) return;
+        return this.#scheduleResume("tool");
+      });
+    }
+
+    if (purpose === "tool") this.#transport.prepareToolContinuation();
+    const operation = this.#baseResumeStream();
+    this.#resumeOperation = operation;
+    void operation.finally(() => {
+      if (this.#resumeOperation !== operation) return;
+      this.#resumeOperation = null;
+      if (this.#queuedOrdinaryResume) {
+        this.#queuedOrdinaryResume = false;
+        void this.#scheduleResume("ordinary").catch(() => {});
+      }
+    });
+    return operation;
   }
 
   #resetStreamState(): void {
@@ -684,6 +717,7 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
     this.#resetRecoveryState();
     this.#toolContinuationIds = [];
     this.#toolContinuationGeneration++;
+    this.#toolContinuationPending = false;
   }
 
   #resetRecoveryState(): void {
@@ -1246,7 +1280,26 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
         this.#resetRecoveryState();
         this.#toolContinuationIds = [];
         this.#toolContinuationGeneration++;
+        this.#toolContinuationPending = false;
         this.messages = [];
+        break;
+
+      case "authoritative-idle":
+        // A correlated idle probe is authoritative only for server stream
+        // ownership. Recovery hints have their own lifecycle and may be
+        // unrelated to this socket probe.
+        this.#streamState.current = broadcastTransition(this.#streamState.current, {
+          type: "clear",
+        }).state;
+        this.#serverStreamIds = [];
+        this.#observedBroadcastResumes.clear();
+        this.#continuationStreamsSeeded.clear();
+        break;
+
+      case "reconnect-needed":
+        if (this.#options.resume !== false) {
+          void this.#scheduleResume("ordinary", true).catch(() => {});
+        }
         break;
 
       case "messages-replaced":
@@ -1304,8 +1357,8 @@ export class AgentChat<M extends UIMessage = UIMessage> extends Chat<M> {
       case "broadcast-response": {
         if (
           event.replay &&
-          this.#streamState.current.status !== "observing" &&
-          !this.#observedBroadcastResumes.has(event.streamId)
+          (this.#streamState.current.status !== "observing" ||
+            this.#streamState.current.streamId !== event.streamId)
         ) {
           // The stream may already be tracked from before a reconnect, so a
           // terminal frame must still settle its bookkeeping even though the
