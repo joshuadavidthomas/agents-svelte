@@ -86,10 +86,10 @@ importers:
         version: 4.0.213(svelte@5.56.4)(zod@4.4.3)
       '@cloudflare/ai-chat':
         specifier: '>=0.9.0 <1.0.0'
-        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
+        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
       agents:
         specifier: '>=0.17.0 <1.0.0'
-        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
       agents-svelte:
         specifier: workspace:*
         version: link:../..
@@ -97,24 +97,24 @@ importers:
         specifier: ^6.0.213
         version: 6.0.213(zod@4.4.3)
       partysocket:
-        specifier: ^1.1.18
+        specifier: ^1.3.0
         version: 1.3.0(react@19.2.7)
       svelte:
         specifier: ^5.56.4
         version: 5.56.4
       workers-ai-provider:
-        specifier: ^3.1.14
+        specifier: ^3.2.1
         version: 3.2.1(@ai-sdk/provider@3.0.12)(ai@6.0.213(zod@4.4.3))
       zod:
         specifier: ^4.2.0
         version: 4.4.3
     devDependencies:
       '@cloudflare/vite-plugin':
-        specifier: ^1.40.0
-        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))
+        specifier: ^1.42.2
+        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@cloudflare/workers-types':
-        specifier: ^4.20260607.1
-        version: 4.20260624.1
+        specifier: ^4.20260624.1
+        version: 4.20260630.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -125,11 +125,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
-        version: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+        specifier: ^4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
   examples/basic-chat:
     dependencies:
@@ -138,10 +138,10 @@ importers:
         version: 4.0.213(svelte@5.56.4)(zod@4.4.3)
       '@cloudflare/ai-chat':
         specifier: '>=0.9.0 <1.0.0'
-        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
+        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
       agents:
         specifier: '>=0.17.0 <1.0.0'
-        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
       agents-svelte:
         specifier: workspace:*
         version: link:../..
@@ -149,21 +149,21 @@ importers:
         specifier: ^6.0.213
         version: 6.0.213(zod@4.4.3)
       partysocket:
-        specifier: ^1.1.18
+        specifier: ^1.3.0
         version: 1.3.0(react@19.2.7)
       svelte:
         specifier: ^5.56.4
         version: 5.56.4
       workers-ai-provider:
-        specifier: ^3.1.14
+        specifier: ^3.2.1
         version: 3.2.1(@ai-sdk/provider@3.0.12)(ai@6.0.213(zod@4.4.3))
     devDependencies:
       '@cloudflare/vite-plugin':
-        specifier: ^1.40.0
-        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))
+        specifier: ^1.42.2
+        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@cloudflare/workers-types':
-        specifier: ^4.20260607.1
-        version: 4.20260624.1
+        specifier: ^4.20260624.1
+        version: 4.20260630.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -174,11 +174,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
-        version: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+        specifier: ^4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
   examples/human-in-the-loop:
     dependencies:
@@ -187,10 +187,10 @@ importers:
         version: 4.0.213(svelte@5.56.4)(zod@4.4.3)
       '@cloudflare/ai-chat':
         specifier: '>=0.9.0 <1.0.0'
-        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
+        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
       agents:
         specifier: '>=0.17.0 <1.0.0'
-        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
       agents-svelte:
         specifier: workspace:*
         version: link:../..
@@ -198,24 +198,24 @@ importers:
         specifier: ^6.0.213
         version: 6.0.213(zod@4.4.3)
       partysocket:
-        specifier: ^1.1.18
+        specifier: ^1.3.0
         version: 1.3.0(react@19.2.7)
       svelte:
         specifier: ^5.56.4
         version: 5.56.4
       workers-ai-provider:
-        specifier: ^3.1.14
+        specifier: ^3.2.1
         version: 3.2.1(@ai-sdk/provider@3.0.12)(ai@6.0.213(zod@4.4.3))
       zod:
         specifier: ^4.2.0
         version: 4.4.3
     devDependencies:
       '@cloudflare/vite-plugin':
-        specifier: ^1.40.0
-        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))
+        specifier: ^1.42.2
+        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@cloudflare/workers-types':
-        specifier: ^4.20260607.1
-        version: 4.20260624.1
+        specifier: ^4.20260624.1
+        version: 4.20260630.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -226,11 +226,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
-        version: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+        specifier: ^4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
   examples/multi-ai-chat:
     dependencies:
@@ -239,10 +239,10 @@ importers:
         version: 4.0.213(svelte@5.56.4)(zod@4.4.3)
       '@cloudflare/ai-chat':
         specifier: '>=0.9.0 <1.0.0'
-        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
+        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
       agents:
         specifier: '>=0.17.0 <1.0.0'
-        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
       agents-svelte:
         specifier: workspace:*
         version: link:../..
@@ -250,24 +250,24 @@ importers:
         specifier: ^6.0.213
         version: 6.0.213(zod@4.4.3)
       partysocket:
-        specifier: ^1.1.18
+        specifier: ^1.3.0
         version: 1.3.0(react@19.2.7)
       svelte:
         specifier: ^5.56.4
         version: 5.56.4
       workers-ai-provider:
-        specifier: ^3.1.14
+        specifier: ^3.2.1
         version: 3.2.1(@ai-sdk/provider@3.0.12)(ai@6.0.213(zod@4.4.3))
       zod:
         specifier: ^4.2.0
         version: 4.4.3
     devDependencies:
       '@cloudflare/vite-plugin':
-        specifier: ^1.40.0
-        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))
+        specifier: ^1.42.2
+        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@cloudflare/workers-types':
-        specifier: ^4.20260607.1
-        version: 4.20260624.1
+        specifier: ^4.20260624.1
+        version: 4.20260630.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -278,11 +278,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
-        version: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+        specifier: ^4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
   examples/sveltekit-chat:
     dependencies:
@@ -293,7 +293,7 @@ importers:
         specifier: '>=0.9.0 <1.0.0'
         version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
       '@sveltejs/adapter-cloudflare':
-        specifier: ^7.2.8
+        specifier: ^7.2.9
         version: 7.2.9(@sveltejs/kit@2.68.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)))(svelte@5.56.4)(typescript@6.0.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)))(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@sveltejs/kit':
         specifier: ^2.68.0
@@ -311,14 +311,14 @@ importers:
         specifier: ^5.56.4
         version: 5.56.4
       workers-ai-provider:
-        specifier: ^3.1.14
+        specifier: ^3.2.1
         version: 3.2.1(@ai-sdk/provider@3.0.12)(ai@6.0.213(zod@4.4.3))
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
       '@tailwindcss/vite':
-        specifier: ^4.3.0
+        specifier: ^4.3.1
         version: 4.3.1(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
       '@types/node':
         specifier: ^26.0.1
@@ -339,7 +339,7 @@ importers:
         specifier: ^4.7.1
         version: 4.7.1(picomatch@4.0.4)(svelte@5.56.4)(typescript@6.0.3)
       tailwindcss:
-        specifier: ^4.3.0
+        specifier: ^4.3.1
         version: 4.3.1
       typescript:
         specifier: ^6.0.3
@@ -348,10 +348,10 @@ importers:
         specifier: ^11.0.0
         version: 11.0.5
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
+        specifier: ^4.104.0
         version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
   examples/tool-calls:
@@ -361,10 +361,10 @@ importers:
         version: 4.0.213(svelte@5.56.4)(zod@4.4.3)
       '@cloudflare/ai-chat':
         specifier: '>=0.9.0 <1.0.0'
-        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
+        version: 0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)
       agents:
         specifier: '>=0.17.0 <1.0.0'
-        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
       agents-svelte:
         specifier: workspace:*
         version: link:../..
@@ -372,21 +372,21 @@ importers:
         specifier: ^6.0.213
         version: 6.0.213(zod@4.4.3)
       partysocket:
-        specifier: ^1.1.18
+        specifier: ^1.3.0
         version: 1.3.0(react@19.2.7)
       svelte:
         specifier: ^5.56.4
         version: 5.56.4
       workers-ai-provider:
-        specifier: ^3.1.14
+        specifier: ^3.2.1
         version: 3.2.1(@ai-sdk/provider@3.0.12)(ai@6.0.213(zod@4.4.3))
     devDependencies:
       '@cloudflare/vite-plugin':
-        specifier: ^1.40.0
-        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))
+        specifier: ^1.42.2
+        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@cloudflare/workers-types':
-        specifier: ^4.20260607.1
-        version: 4.20260624.1
+        specifier: ^4.20260624.1
+        version: 4.20260630.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -397,20 +397,20 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
-        version: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+        specifier: ^4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
   examples/voice-agent:
     dependencies:
       '@cloudflare/voice':
         specifier: '>=0.3.3 <1.0.0'
-        version: 0.3.3(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(partysocket@1.3.0(react@19.2.7))(react@19.2.7)
+        version: 0.3.3(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(partysocket@1.3.0(react@19.2.7))(react@19.2.7)
       agents:
         specifier: '>=0.17.0 <1.0.0'
-        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
       agents-svelte:
         specifier: workspace:*
         version: link:../..
@@ -418,24 +418,24 @@ importers:
         specifier: ^6.0.213
         version: 6.0.213(zod@4.4.3)
       partysocket:
-        specifier: ^1.1.18
+        specifier: ^1.3.0
         version: 1.3.0(react@19.2.7)
       svelte:
         specifier: ^5.56.4
         version: 5.56.4
       workers-ai-provider:
-        specifier: ^3.1.14
+        specifier: ^3.2.1
         version: 3.2.1(@ai-sdk/provider@3.0.12)(ai@6.0.213(zod@4.4.3))
       zod:
         specifier: ^4.3.6
         version: 4.4.3
     devDependencies:
       '@cloudflare/vite-plugin':
-        specifier: ^1.40.0
-        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))
+        specifier: ^1.42.2
+        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@cloudflare/workers-types':
-        specifier: ^4.20260607.1
-        version: 4.20260624.1
+        specifier: ^4.20260624.1
+        version: 4.20260630.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -446,36 +446,36 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
-        version: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+        specifier: ^4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
   examples/voice-input:
     dependencies:
       '@cloudflare/voice':
         specifier: '>=0.3.3 <1.0.0'
-        version: 0.3.3(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(partysocket@1.3.0(react@19.2.7))(react@19.2.7)
+        version: 0.3.3(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(partysocket@1.3.0(react@19.2.7))(react@19.2.7)
       agents:
         specifier: '>=0.17.0 <1.0.0'
-        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
       agents-svelte:
         specifier: workspace:*
         version: link:../..
       partysocket:
-        specifier: ^1.1.18
+        specifier: ^1.3.0
         version: 1.3.0(react@19.2.7)
       svelte:
         specifier: ^5.56.4
         version: 5.56.4
     devDependencies:
       '@cloudflare/vite-plugin':
-        specifier: ^1.40.0
-        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))
+        specifier: ^1.42.2
+        version: 1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))
       '@cloudflare/workers-types':
-        specifier: ^4.20260607.1
-        version: 4.20260624.1
+        specifier: ^4.20260624.1
+        version: 4.20260630.1
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
         version: 7.1.2(svelte@5.56.4)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
@@ -486,11 +486,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.1.0
         version: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       wrangler:
-        specifier: ^4.98.0
-        version: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+        specifier: ^4.104.0
+        version: 4.104.0(@cloudflare/workers-types@4.20260630.1)
 
 packages:
 
@@ -726,9 +726,6 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
-
-  '@cloudflare/workers-types@4.20260624.1':
-    resolution: {integrity: sha512-o8i70Nycnm6KpPPfdjHek09IkG3hoIAv88d1pn90Djn2oXcQ35dYuzKYZUBd0eE2Tpsd5yz8L/a6FvI6CKFBQw==}
 
   '@cloudflare/workers-types@4.20260630.1':
     resolution: {integrity: sha512-yl+c9vwvko9UZ0frmtsHuwOh3BRHvNjLrfelAp5Akpqe1+Ho1UWekr3nmjJ1D64CH0Yb0K0oRMV4i7npOFzsog==}
@@ -3252,15 +3249,6 @@ snapshots:
 
   '@cfworker/json-schema@4.1.1': {}
 
-  '@cloudflare/ai-chat@0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/react': 3.0.215(react@19.2.7)(zod@4.4.3)
-      agents: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
-      ai: 6.0.213(zod@4.4.3)
-      nanoid: 5.1.16
-      react: 19.2.7
-      zod: 4.4.3
-
   '@cloudflare/ai-chat@0.9.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(react@19.2.7)(zod@4.4.3)':
     dependencies:
       '@ai-sdk/react': 3.0.215(react@19.2.7)(zod@4.4.3)
@@ -3287,25 +3275,18 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260623.1
 
-  '@cloudflare/vite-plugin@1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1))':
+  '@cloudflare/vite-plugin@1.42.2(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(workerd@1.20260623.1)(wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1))':
     dependencies:
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260623.1)
       miniflare: 4.20260623.0
       unenv: 2.0.0-rc.24
       vite: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
-      wrangler: 4.104.0(@cloudflare/workers-types@4.20260624.1)
+      wrangler: 4.104.0(@cloudflare/workers-types@4.20260630.1)
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
       - workerd
-
-  '@cloudflare/voice@0.3.3(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(partysocket@1.3.0(react@19.2.7))(react@19.2.7)':
-    dependencies:
-      agents: 0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3)
-    optionalDependencies:
-      partysocket: 1.3.0(react@19.2.7)
-      react: 19.2.7
 
   '@cloudflare/voice@0.3.3(agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3))(partysocket@1.3.0(react@19.2.7))(react@19.2.7)':
     dependencies:
@@ -3328,8 +3309,6 @@ snapshots:
 
   '@cloudflare/workerd-windows-64@1.20260623.1':
     optional: true
-
-  '@cloudflare/workers-types@4.20260624.1': {}
 
   '@cloudflare/workers-types@4.20260630.1': {}
 
@@ -4032,35 +4011,6 @@ snapshots:
       negotiator: 1.0.0
 
   acorn@8.17.0: {}
-
-  agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260624.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3):
-    dependencies:
-      '@babel/plugin-proposal-decorators': 8.0.2(@babel/core@8.0.1)
-      '@cfworker/json-schema': 4.1.1
-      '@cloudflare/codemode': 0.4.2(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(ai@6.0.213(zod@4.4.3))(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3)
-      '@rolldown/plugin-babel': 0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.2)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-      cron-schedule: 6.0.0
-      esbuild: 0.28.1
-      mimetext: 3.0.28
-      nanoid: 5.1.16
-      partyserver: 0.5.8(@cloudflare/workers-types@4.20260624.1)
-      partysocket: 1.3.0(react@19.2.7)
-      react: 19.2.7
-      yaml: 2.9.0
-      yargs: 18.0.0
-      zod: 4.4.3
-    optionalDependencies:
-      '@ai-sdk/react': 3.0.215(react@19.2.7)(zod@4.4.3)
-      ai: 6.0.213(zod@4.4.3)
-      vite: 8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@babel/plugin-transform-runtime'
-      - '@babel/runtime'
-      - '@cloudflare/workers-types'
-      - rolldown
-      - supports-color
 
   agents@0.17.0(@ai-sdk/react@3.0.215(react@19.2.7)(zod@4.4.3))(@babel/core@8.0.1)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260630.1)(ai@6.0.213(zod@4.4.3))(react@19.2.7)(rolldown@1.1.3)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))(zod@4.4.3):
     dependencies:
@@ -4908,11 +4858,6 @@ snapshots:
 
   parseurl@1.3.3: {}
 
-  partyserver@0.5.8(@cloudflare/workers-types@4.20260624.1):
-    dependencies:
-      '@cloudflare/workers-types': 4.20260624.1
-      nanoid: 5.1.16
-
   partyserver@0.5.8(@cloudflare/workers-types@4.20260630.1):
     dependencies:
       '@cloudflare/workers-types': 4.20260630.1
@@ -5432,23 +5377,6 @@ snapshots:
     dependencies:
       mrmime: 2.0.1
       regexparam: 3.0.0
-
-  wrangler@4.104.0(@cloudflare/workers-types@4.20260624.1):
-    dependencies:
-      '@cloudflare/kv-asset-handler': 0.5.0
-      '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260623.1)
-      blake3-wasm: 2.1.5
-      esbuild: 0.28.1
-      miniflare: 4.20260623.0
-      path-to-regexp: 6.3.0
-      unenv: 2.0.0-rc.24
-      workerd: 1.20260623.1
-    optionalDependencies:
-      '@cloudflare/workers-types': 4.20260624.1
-      fsevents: 2.3.3
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   wrangler@4.104.0(@cloudflare/workers-types@4.20260630.1):
     dependencies:
