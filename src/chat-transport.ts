@@ -8,8 +8,9 @@ import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 import { nanoid } from "nanoid";
 import { MessageType, type OutgoingMessage } from "@cloudflare/ai-chat/types";
 
-interface AgentChatConnection {
+export interface AgentChatConnection {
   send: (data: string) => void;
+  readonly readyState?: number;
   addEventListener: (type: string, listener: (event: MessageEvent) => void) => void;
   removeEventListener: (type: string, listener: (event: MessageEvent) => void) => void;
 }
@@ -22,6 +23,8 @@ type PrepareBody<ChatMessage extends UIMessage> = (options: {
 
 export type AgentChatTransportEvent<ChatMessage extends UIMessage = UIMessage> =
   | { type: "history-cleared" }
+  | { type: "authoritative-idle" }
+  | { type: "reconnect-needed" }
   | { type: "messages-replaced"; messages: ChatMessage[] }
   | { type: "message-updated"; message: ChatMessage }
   | { type: "chat-recovering"; recovering: boolean; id?: string }
@@ -54,9 +57,12 @@ type AgentChatTransportStartOptions<ChatMessage extends UIMessage = UIMessage> =
 };
 
 type ActiveStreamSession = {
+  direct: boolean;
   controller: ReadableStreamDefaultController<UIMessageChunk>;
   activeTextIds: Set<string>;
   activeReasoningIds: Set<string>;
+  deliveredBodies: string[];
+  replayCursor: number;
   finish: (
     action: () => void,
     options?: {
@@ -68,9 +74,14 @@ type ActiveStreamSession = {
 };
 
 type PendingResume = {
-  accept: (requestId: string) => void;
+  probeId: string;
+  purpose: "ordinary" | "tool";
+  accept: (requestId: string, connection: AgentChatConnection) => void;
   none: () => void;
   cancel: () => void;
+  suspend: () => void;
+  pending: () => void;
+  retry: () => void;
 };
 
 type ChatResponseMessage<ChatMessage extends UIMessage> = Extract<
@@ -96,12 +107,16 @@ export class AgentChatTransport<
   readonly #ignoredRequestIds = new Set<string>();
   readonly #assistantMessageIds = new Map<string, string>();
   readonly #pendingReplayStreamIds = new Set<string>();
+  readonly #ackedResumeRequestIds = new Set<string>();
 
   #pendingResume: PendingResume | null = null;
   #expectToolContinuation = false;
   #abortActiveContinuation: ((cancelServer: boolean) => boolean) | null = null;
   #started = false;
   #closed = false;
+  #connectionWasClosed = false;
+  #connectionOpen = false;
+  #removeGenerationListeners: (() => void) | null = null;
 
   constructor(options: AgentChatTransportOptions<ChatMessage>) {
     this.#getConnection = options.getConnection;
@@ -130,9 +145,51 @@ export class AgentChatTransport<
       return;
     }
 
-    this.#startedConnection?.removeEventListener("message", this.#handleMessage);
+    const previousConnection = this.#startedConnection;
+    this.#pendingResume?.suspend();
+    if (previousConnection && !this.#shouldAcceptBroadcastResume?.()) {
+      this.#detachDirectStreams();
+    }
+    this.#removeGenerationListeners?.();
     this.#startedConnection = connection;
-    connection?.addEventListener("message", this.#handleMessage);
+    this.#connectionOpen = connection?.readyState === undefined || connection.readyState === 1;
+    this.#ackedResumeRequestIds.clear();
+    if (connection) {
+      const generation = connection;
+      const message = (event: MessageEvent) => {
+        if (this.#startedConnection === generation && this.#getConnection() === generation) {
+          this.#handleMessage(event, generation);
+        }
+      };
+      const close = () => {
+        if (this.#startedConnection !== generation || this.#getConnection() !== generation) return;
+        this.#connectionOpen = false;
+        this.#connectionWasClosed = true;
+        this.#ackedResumeRequestIds.clear();
+        this.#pendingResume?.suspend();
+        if (!this.#shouldAcceptBroadcastResume?.()) this.#detachDirectStreams();
+      };
+      const open = () => {
+        if (this.#startedConnection !== generation || this.#getConnection() !== generation) return;
+        this.#connectionOpen = true;
+        const wasClosed = this.#connectionWasClosed;
+        this.#connectionWasClosed = false;
+        this.#ackedResumeRequestIds.clear();
+        if (this.#pendingResume) this.#pendingResume.retry();
+        else if (wasClosed) this.#onEvent?.({ type: "reconnect-needed" });
+      };
+      connection.addEventListener("message", message);
+      connection.addEventListener("close", close as (event: MessageEvent) => void);
+      connection.addEventListener("open", open as (event: MessageEvent) => void);
+      this.#removeGenerationListeners = () => {
+        connection.removeEventListener("message", message);
+        connection.removeEventListener("close", close as (event: MessageEvent) => void);
+        connection.removeEventListener("open", open as (event: MessageEvent) => void);
+      };
+      if (this.#connectionOpen) this.#pendingResume?.retry();
+    } else {
+      this.#removeGenerationListeners = null;
+    }
   }
 
   prepareToolContinuation(): void {
@@ -270,9 +327,14 @@ export class AgentChatTransport<
 
     const stream = new ReadableStream<UIMessageChunk>({
       start: (controller) => {
-        session = this.#registerStream(requestId, controller, () => {
-          completed = true;
-        });
+        session = this.#registerStream(
+          requestId,
+          controller,
+          () => {
+            completed = true;
+          },
+          true,
+        );
       },
       cancel: () => {
         onAbort();
@@ -305,6 +367,7 @@ export class AgentChatTransport<
     }
 
     return new Promise<ReadableStream<UIMessageChunk> | null>((resolve) => {
+      const probeId = nanoid(8);
       let resolved = false;
       let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -318,19 +381,33 @@ export class AgentChatTransport<
         resolve(value);
       };
 
+      const armTimeout = (delay: number) => {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => done(null), delay);
+      };
+
       const pending: PendingResume = {
-        accept: (requestId) => {
-          this.#sendResumeAck(requestId);
-          done(this.#createResumeStream(requestId));
+        probeId,
+        purpose: "ordinary",
+        accept: (requestId, connection) => {
+          const stream = this.#createResumeStream(requestId);
+          this.#sendResumeAck(requestId, connection);
+          done(stream);
         },
         none: () => done(null),
         cancel: () => done(null),
+        suspend: () => {
+          if (timeout) clearTimeout(timeout);
+          timeout = undefined;
+        },
+        pending: () => armTimeout(60_000),
+        retry: () => {
+          if (this.#sendResumeRequest(probeId)) armTimeout(5_000);
+        },
       };
 
-      this.#pendingResume?.cancel();
       this.#pendingResume = pending;
-      this.#sendResumeRequest();
-      timeout = setTimeout(() => done(null), 5000);
+      pending.retry();
     });
   }
 
@@ -341,7 +418,8 @@ export class AgentChatTransport<
 
     this.#closed = true;
     if (this.#started) {
-      this.#startedConnection?.removeEventListener("message", this.#handleMessage);
+      this.#removeGenerationListeners?.();
+      this.#removeGenerationListeners = null;
       this.#started = false;
       this.#startedConnection = null;
     }
@@ -359,6 +437,7 @@ export class AgentChatTransport<
     this.#ignoredRequestIds.clear();
     this.#assistantMessageIds.clear();
     this.#pendingReplayStreamIds.clear();
+    this.#ackedResumeRequestIds.clear();
   }
 
   #createToolContinuationStream(): ReadableStream<UIMessageChunk> {
@@ -370,12 +449,18 @@ export class AgentChatTransport<
     let session: ActiveStreamSession | null = null;
     let readerController!: ReadableStreamDefaultController<UIMessageChunk>;
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    const probeId = nanoid(8);
 
     const clearPending = (pending: PendingResume) => {
       if (this.#pendingResume === pending) {
         this.#pendingResume = null;
       }
       if (timeout) clearTimeout(timeout);
+    };
+
+    const armTimeout = (pending: PendingResume, delay: number) => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => finish(() => readerController.close(), pending), delay);
     };
 
     const finish = (
@@ -428,7 +513,9 @@ export class AgentChatTransport<
         readerController = controller;
 
         const pending: PendingResume = {
-          accept: (id) => {
+          probeId,
+          purpose: "tool",
+          accept: (id, connection) => {
             if (completed || requestId) return;
             requestId = id;
             clearPending(pending);
@@ -436,7 +523,7 @@ export class AgentChatTransport<
               completed = true;
               this.#abortActiveContinuation = null;
             });
-            this.#sendResumeAck(id);
+            this.#sendResumeAck(id, connection);
           },
           none: () => {
             finish(() => controller.close(), pending);
@@ -444,12 +531,18 @@ export class AgentChatTransport<
           cancel: () => {
             finish(() => controller.close(), pending);
           },
+          suspend: () => {
+            if (timeout) clearTimeout(timeout);
+            timeout = undefined;
+          },
+          pending: () => armTimeout(pending, 60_000),
+          retry: () => {
+            if (this.#sendResumeRequest(probeId)) armTimeout(pending, 5_000);
+          },
         };
 
-        this.#pendingResume?.cancel();
         this.#pendingResume = pending;
-        this.#sendResumeRequest();
-        timeout = setTimeout(() => finish(() => controller.close(), pending), 5000);
+        pending.retry();
       },
       cancel: () => {
         finish(() => {});
@@ -474,12 +567,16 @@ export class AgentChatTransport<
     requestId: string,
     controller: ReadableStreamDefaultController<UIMessageChunk>,
     onFinish?: () => void,
+    direct = false,
   ): ActiveStreamSession {
     let completed = false;
     const session: ActiveStreamSession = {
+      direct,
       controller,
       activeTextIds: new Set(),
       activeReasoningIds: new Set(),
+      deliveredBodies: [],
+      replayCursor: 0,
       finish: (action, options) => {
         if (completed) return;
         completed = true;
@@ -489,6 +586,7 @@ export class AgentChatTransport<
           // Stream may already be closed.
         }
         this.#activeStreams.delete(requestId);
+        this.#ackedResumeRequestIds.delete(requestId);
         if (options?.ignoreRemaining) {
           this.#ignoredRequestIds.add(requestId);
         }
@@ -527,7 +625,7 @@ export class AgentChatTransport<
     return session;
   }
 
-  #handleMessage = (event: MessageEvent) => {
+  #handleMessage = (event: MessageEvent, connection: AgentChatConnection) => {
     if (this.#closed || typeof event.data !== "string") {
       return;
     }
@@ -541,6 +639,7 @@ export class AgentChatTransport<
 
     switch (data.type) {
       case MessageType.CF_AGENT_CHAT_CLEAR:
+        this.#finishAllStreamsLocally();
         this.#onEvent?.({ type: "history-cleared" });
         break;
 
@@ -567,11 +666,26 @@ export class AgentChatTransport<
         break;
 
       case MessageType.CF_AGENT_STREAM_RESUME_NONE:
-        this.#pendingResume?.none();
+        this.#handleStreamResumeNone(
+          data as OutgoingMessage<ChatMessage> & {
+            probeId?: string;
+            reason?: string;
+          },
+        );
+        break;
+
+      case MessageType.CF_AGENT_STREAM_PENDING:
+        if (
+          !("probeId" in data) ||
+          !data.probeId ||
+          data.probeId === this.#pendingResume?.probeId
+        ) {
+          this.#pendingResume?.pending();
+        }
         break;
 
       case MessageType.CF_AGENT_STREAM_RESUMING:
-        this.#handleStreamResuming(data as StreamResumingMessage<ChatMessage>);
+        this.#handleStreamResuming(data as StreamResumingMessage<ChatMessage>, connection);
         break;
 
       case MessageType.CF_AGENT_USE_CHAT_RESPONSE:
@@ -580,16 +694,32 @@ export class AgentChatTransport<
     }
   };
 
-  #handleStreamResuming(data: StreamResumingMessage<ChatMessage>): void {
+  #handleStreamResuming(
+    data: StreamResumingMessage<ChatMessage>,
+    connection: AgentChatConnection,
+  ): void {
     const requestId = data.id;
+    const probeId =
+      "probeId" in data && typeof data.probeId === "string" ? data.probeId : undefined;
+    const pending = this.#pendingResume;
 
-    if (this.#pendingResume) {
-      this.#pendingReplayStreamIds.add(requestId);
-      this.#pendingResume.accept(requestId);
+    if (pending && probeId && probeId !== pending.probeId) {
       return;
     }
 
+    // A direct send remains the sole owner. Offers merely re-enable replay on
+    // the replacement socket and must not consume a waiting continuation.
     if (this.#activeStreams.has(requestId)) {
+      this.#sendResumeAck(requestId, connection);
+      if (pending?.purpose === "ordinary" && (!probeId || probeId === pending.probeId)) {
+        pending.none();
+      }
+      return;
+    }
+
+    if (pending && (!probeId || probeId === pending.probeId)) {
+      this.#pendingReplayStreamIds.add(requestId);
+      if (this.#isCurrentOpenConnection(connection)) pending.accept(requestId, connection);
       return;
     }
 
@@ -598,12 +728,24 @@ export class AgentChatTransport<
     }
 
     this.#pendingReplayStreamIds.add(requestId);
-    this.#sendResumeAck(requestId);
     this.#onEvent?.({ type: "broadcast-resume", streamId: requestId });
+    this.#sendResumeAck(requestId, connection);
+  }
+
+  #handleStreamResumeNone(data: { probeId?: string; reason?: string }): void {
+    const pending = this.#pendingResume;
+    if (!pending || (data.probeId && data.probeId !== pending.probeId)) return;
+    pending.none();
+    if (data.probeId === pending.probeId && data.reason === "idle") {
+      this.#onEvent?.({ type: "authoritative-idle" });
+    }
   }
 
   #handleChatResponse(data: ChatResponseMessage<ChatMessage>): void {
     const requestId = data.id;
+    if (data.done || data.error) {
+      this.#ackedResumeRequestIds.delete(requestId);
+    }
     const chunkData = this.#parseChunk(data.body);
     if (chunkData !== undefined) {
       this.#rememberLocalMessageId(requestId, chunkData);
@@ -626,7 +768,20 @@ export class AgentChatTransport<
         return;
       }
 
-      if (chunkData !== undefined) {
+      let suppressReplay = false;
+      if (data.replay) {
+        if (data.body && session.deliveredBodies[session.replayCursor] === data.body) {
+          session.replayCursor++;
+          suppressReplay = true;
+        } else if (data.body && chunkData !== undefined) {
+          session.deliveredBodies.push(data.body);
+        }
+      } else if (data.body && chunkData !== undefined) {
+        session.deliveredBodies.push(data.body);
+      }
+      if (data.replayComplete) session.replayCursor = 0;
+
+      if (chunkData !== undefined && !suppressReplay) {
         this.#enqueueChunk(session, chunkData);
       }
 
@@ -635,6 +790,7 @@ export class AgentChatTransport<
           emitLocalFinish: true,
         });
       }
+      if (data.done || data.error) this.#ackedResumeRequestIds.delete(requestId);
       return;
     }
 
@@ -775,21 +931,64 @@ export class AgentChatTransport<
     }
   }
 
-  #sendResumeRequest(): void {
+  #sendResumeRequest(probeId: string): boolean {
+    const connection = this.#startedConnection;
+    if (!connection || !this.#isCurrentOpenConnection(connection)) return false;
     try {
-      this.#send({ type: MessageType.CF_AGENT_STREAM_RESUME_REQUEST });
+      this.#send({ type: MessageType.CF_AGENT_STREAM_RESUME_REQUEST, probeId }, connection);
+      return true;
     } catch {
       // WebSocket may already be closed.
+      return false;
     }
   }
 
-  #sendResumeAck(id: string): void {
-    this.#send({ type: MessageType.CF_AGENT_STREAM_RESUME_ACK, id });
+  #sendResumeAck(id: string, connection = this.#startedConnection): void {
+    if (!connection || !this.#isCurrentOpenConnection(connection)) return;
+    if (this.#ackedResumeRequestIds.has(id)) return;
+    this.#ackedResumeRequestIds.add(id);
+    try {
+      this.#send({ type: MessageType.CF_AGENT_STREAM_RESUME_ACK, id }, connection);
+    } catch (error) {
+      this.#ackedResumeRequestIds.delete(id);
+      throw error;
+    }
   }
 
-  #send(payload: Record<string, unknown>): void {
+  #isCurrentOpenConnection(connection: AgentChatConnection): boolean {
+    return (
+      this.#connectionOpen &&
+      this.#startedConnection === connection &&
+      this.#getConnection() === connection
+    );
+  }
+
+  #detachDirectStreams(): void {
+    for (const session of this.#activeStreams.values()) {
+      if (session.direct) {
+        session.finish(() => session.controller.close(), {
+          ignoreRemaining: true,
+          emitLocalFinish: true,
+        });
+      }
+    }
+  }
+
+  #finishAllStreamsLocally(): void {
+    this.#pendingResume?.cancel();
+    this.#pendingResume = null;
+    this.#abortActiveContinuation?.(false);
+    for (const session of this.#activeStreams.values()) {
+      session.finish(() => session.controller.close(), {
+        ignoreRemaining: true,
+        emitLocalFinish: false,
+      });
+    }
+  }
+
+  #send(payload: Record<string, unknown>, expected?: AgentChatConnection): void {
     const connection = this.#getConnection();
-    if (!connection) {
+    if (!connection || (expected && connection !== expected)) {
       throw new Error("[agents-svelte/chat] AgentChatTransport is not connected");
     }
     connection.send(JSON.stringify(payload));

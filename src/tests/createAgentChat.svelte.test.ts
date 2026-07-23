@@ -1309,6 +1309,432 @@ describe("createAgentChat — server-initiated messages", () => {
     });
   });
 
+  it("correlates resume replies and retransmits the same probe after reconnect", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeDefined();
+    });
+    const first = findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST);
+    expect(first?.probeId).toEqual(expect.any(String));
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
+      probeId: "another-probe",
+      reason: "idle",
+    });
+    await expectNotSettled(chat.resumeStream());
+
+    mock.dispatchClose();
+    mock.dispatchOpen();
+    const requests = findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST);
+    expect(requests.at(-1)?.probeId).toBe(first?.probeId);
+
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    await expectSettled(chat.resumeStream());
+  });
+
+  it("starts the probe timeout only after a delayed socket actually opens", async () => {
+    const mock = createMockAgent({ readyState: 0 });
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+    const resume = chat.resumeStream();
+    let settled = false;
+    void resume.then(() => {
+      settled = true;
+    });
+
+    vi.useFakeTimers();
+    try {
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(settled).toBe(false);
+      expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toHaveLength(0);
+
+      mock.dispatchOpen();
+      const probe = findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST);
+      expect(probe?.probeId).toEqual(expect.any(String));
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("suspends an ordinary probe timeout while disconnected and retries the same probe", async () => {
+    vi.useFakeTimers();
+    try {
+      const mock = createMockAgent();
+      const chat = makeChat(mock, { resume: true });
+      expect(chat.initialized).toBe(true);
+      const resume = chat.resumeStream();
+      let settled = false;
+      void resume.then(() => {
+        settled = true;
+      });
+
+      const first = findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST);
+      expect(first?.probeId).toEqual(expect.any(String));
+      await vi.advanceTimersByTimeAsync(1_000);
+      mock.dispatchClose();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(settled).toBe(false);
+
+      mock.dispatchOpen();
+      const requests = findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST);
+      expect(requests).toHaveLength(2);
+      expect(requests[1]?.probeId).toBe(first?.probeId);
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("settles an active direct stream on close without replay when resume is disabled", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: false });
+    await waitForChatInitialized(chat);
+    const request = chat.sendMessage({ text: "hello" });
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toBeDefined();
+    });
+
+    mock.dispatchClose();
+    await expectSettled(request);
+    mock.dispatchOpen();
+
+    expect(findSent(mock, MessageType.CF_AGENT_CHAT_REQUEST_CANCEL)).toBeUndefined();
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toBeUndefined();
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeUndefined();
+  });
+
+  it("settles a direct stream when its socket is replaced with resume disabled", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: false });
+    await waitForChatInitialized(chat);
+    const request = chat.sendMessage({ text: "hello" });
+    await vi.waitFor(() => {
+      expect(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)).toBeDefined();
+    });
+    const requestId = findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id;
+
+    const oldSocket = mock.replaceSocket();
+    flushSync();
+    await expectSettled(request);
+    oldSocket.dispatchPreviousServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: requestId,
+    });
+
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toBeUndefined();
+    expect(findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toBeUndefined();
+  });
+
+  it("invalidates a queued tool continuation on clear and coalesces duplicate requests", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, {
+      resume: true,
+      initialMessages: [
+        {
+          id: "queued-tools",
+          role: "assistant",
+          parts: [
+            seedToolPart("queued-a", "foo").parts[0]!,
+            seedToolPart("queued-b", "bar").parts[0]!,
+          ],
+        },
+      ],
+    });
+    await waitForChatInitialized(chat);
+    await vi.waitFor(() => {
+      expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toHaveLength(1);
+    });
+
+    chat.pendingToolCalls[0]!.addOutput({ output: "a" });
+    chat.pendingToolCalls[1]!.addOutput({ output: "b" });
+    chat.clearHistory();
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toHaveLength(1);
+    expect(chat.isToolContinuation).toBe(false);
+  });
+
+  it("ACKs duplicate offers once per connection generation and releases on terminal", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    await chat.resumeStream();
+    mock.sentMessages.length = 0;
+
+    for (let i = 0; i < 2; i++) {
+      mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "offered" });
+    }
+    expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toHaveLength(1);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "offered",
+      done: true,
+    });
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUMING, id: "offered" });
+    expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK)).toHaveLength(2);
+  });
+
+  it("uses only a matching correlated idle response to clear stale stream activity", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    const initialResume = chat.resumeStream();
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    await initialResume;
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: "stale-stream",
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_CHAT_RECOVERING,
+      recovering: true,
+    });
+    flushSync();
+    expect(chat.isServerStreaming).toBe(true);
+    expect(chat.isRecovering).toBe(true);
+
+    const continuationOwned = chat.resumeStream();
+    const firstProbe = findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST).at(
+      -1,
+    )?.probeId;
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
+      probeId: "stale-probe",
+      reason: "idle",
+    });
+    await expectNotSettled(continuationOwned);
+    expect(chat.isServerStreaming).toBe(true);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
+      probeId: firstProbe,
+      reason: "continuation-owned",
+    });
+    await continuationOwned;
+    expect(chat.isServerStreaming).toBe(true);
+
+    const idle = chat.resumeStream();
+    const idleProbe = findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST).at(-1)?.probeId;
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
+      probeId: idleProbe,
+      reason: "idle",
+    });
+    await idle;
+    flushSync();
+
+    expect(chat.isServerStreaming).toBe(false);
+    expect(chat.isRecovering).toBe(true);
+    expect(chat.activity).toEqual({
+      kind: "recovering",
+      streamIds: [],
+      unidentified: true,
+    });
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "stale-stream",
+      body: JSON.stringify({ type: "start", messageId: "stale-assistant" }),
+      done: false,
+      replay: true,
+    });
+    flushSync();
+    expect(chat.messages.some((message) => message.id === "stale-assistant")).toBe(false);
+    expect(chat.isServerStreaming).toBe(false);
+  });
+
+  it("shares one in-flight public resume operation", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    const first = chat.resumeStream();
+    const second = chat.resumeStream();
+    expect(second).toBe(first);
+    expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)).toHaveLength(1);
+
+    const probeId = findSent(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST)?.probeId;
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUME_NONE,
+      probeId,
+      reason: "idle",
+    });
+    await Promise.all([first, second]);
+  });
+
+  it("keeps a direct send authoritative while suppressing its replayed prefix", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock, { resume: true });
+    await waitForChatInitialized(chat);
+
+    const initialResume = chat.resumeStream();
+    mock.dispatchServerMessage({ type: MessageType.CF_AGENT_STREAM_RESUME_NONE });
+    await initialResume;
+
+    const request = chat.sendMessage({ text: "hello" });
+    let requestId = "";
+    await vi.waitFor(() => {
+      requestId = String(findSentAll(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST).at(-1)?.id ?? "");
+      expect(requestId).not.toBe("");
+    });
+
+    const replayedPrefix = [
+      { type: "start", messageId: "assistant-direct" },
+      { type: "text-start", id: "text-direct" },
+      { type: "text-delta", id: "text-direct", delta: "hel" },
+    ];
+    for (const chunk of replayedPrefix) {
+      mock.dispatchServerMessage({
+        type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+        id: requestId,
+        body: JSON.stringify(chunk),
+        done: false,
+      });
+    }
+    await vi.waitFor(() => {
+      expect(chat.messages.at(-1)?.parts).toContainEqual({
+        type: "text",
+        text: "hel",
+        state: "streaming",
+      });
+    });
+
+    mock.dispatchClose();
+    mock.dispatchOpen();
+    await vi.waitFor(() => {
+      expect(findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST).length).toBeGreaterThan(
+        1,
+      );
+    });
+    const reconnectProbe = findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST).at(
+      -1,
+    )?.probeId;
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: requestId,
+      probeId: reconnectProbe,
+    });
+
+    for (const chunk of replayedPrefix) {
+      mock.dispatchServerMessage({
+        type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+        id: requestId,
+        body: JSON.stringify(chunk),
+        done: false,
+        replay: true,
+      });
+    }
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: "",
+      done: false,
+      replay: true,
+      replayComplete: true,
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: JSON.stringify({ type: "text-delta", id: "text-direct", delta: "lo" }),
+      done: false,
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: JSON.stringify({ type: "text-end", id: "text-direct" }),
+      done: false,
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: "",
+      done: true,
+    });
+
+    await request;
+    expect(chat.messages.at(-1)?.parts.filter((part) => part.type === "text")).toEqual([
+      { type: "text", text: "hello", state: "done" },
+    ]);
+  });
+
+  it("keeps a tool continuation pending when the old direct stream is offered first", async () => {
+    const mock = createMockAgent();
+    const chat = makeChat(mock);
+    await waitForChatInitialized(chat);
+
+    const originalRequest = chat.sendMessage({ text: "use a tool" });
+    void originalRequest.catch(() => {});
+    let requestId = "";
+    await vi.waitFor(() => {
+      requestId = String(findSent(mock, MessageType.CF_AGENT_USE_CHAT_REQUEST)?.id ?? "");
+      expect(requestId).not.toBe("");
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: JSON.stringify({ type: "start", messageId: "assistant-tool-race" }),
+      done: false,
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: requestId,
+      body: JSON.stringify({
+        type: "tool-input-available",
+        toolCallId: "call-race",
+        toolName: "getWeather",
+        input: { city: "Paris" },
+      }),
+      done: false,
+    });
+    await vi.waitFor(() => expect(chat.pendingToolCalls).toHaveLength(1));
+    chat.pendingToolCalls[0]!.addOutput({ output: { weather: "sunny" } });
+    await vi.waitFor(() => expect(chat.isToolContinuation).toBe(true));
+
+    const continuationProbe = findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_REQUEST).at(
+      -1,
+    )?.probeId;
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: requestId,
+      probeId: continuationProbe,
+    });
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_STREAM_RESUMING,
+      id: "continuation-race",
+      probeId: continuationProbe,
+    });
+    expect(
+      findSentAll(mock, MessageType.CF_AGENT_STREAM_RESUME_ACK).some(
+        (message) => message.id === "continuation-race",
+      ),
+    ).toBe(true);
+
+    mock.dispatchServerMessage({
+      type: MessageType.CF_AGENT_USE_CHAT_RESPONSE,
+      id: "continuation-race",
+      body: "",
+      done: true,
+      continuation: true,
+    });
+    await vi.waitFor(() => expect(chat.isToolContinuation).toBe(false));
+  });
+
   it("settles a local send when resume replaces the same request stream", async () => {
     const mock = createMockAgent();
     const chat = makeChat(mock, { resume: true });
