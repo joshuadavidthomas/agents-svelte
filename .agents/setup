@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mise_bin="$HOME/.local/bin/mise"
+
+echo "==> Installing mise"
+if [[ ! -x "$mise_bin" ]]; then
+  curl -fsSL https://mise.run | sh
+fi
+
+profile_marker="# agents-svelte mise activation"
+touch "$HOME/.bash_profile"
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile"; then
+  cat >> "$HOME/.bash_profile" <<'EOF'
+
+# agents-svelte mise activation
+if [[ -x "$HOME/.local/bin/mise" ]]; then
+  eval "$("$HOME/.local/bin/mise" activate bash)"
+fi
+EOF
+fi
+
+echo "==> Installing Node.js 22"
+"$mise_bin" install node@22
+"$mise_bin" use --global node@22
+eval "$("$mise_bin" activate bash)"
+
+echo "==> Activating pnpm 11.1.1"
+corepack enable
+corepack prepare pnpm@11.1.1 --activate
+
+echo "==> Installing workspace dependencies"
+cd "$repo_root"
+pnpm install --frozen-lockfile
+
+echo "==> Installing Playwright Chromium"
+pnpm exec playwright install --with-deps chromium
+
+echo "==> Orb setup complete"
+node --version
+pnpm --version
