@@ -33,6 +33,9 @@ coverage
 /src/e2e/test-results/
 /src/e2e/playwright-report/
 
+# Generated per-orb Portal state
+/.amp/portals/
+
 # nyc test coverage
 .nyc_output
 
