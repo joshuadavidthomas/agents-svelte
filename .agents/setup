@@ -2,10 +2,9 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-mise_bin="$HOME/.local/bin/mise"
 
 echo "==> Ensuring mise is available"
-if [[ ! -x "$mise_bin" ]]; then
+if ! command -v mise >/dev/null 2>&1; then
   curl -fsSL https://mise.run | sh
 fi
 
@@ -22,8 +21,8 @@ EOF
 fi
 
 echo "==> Installing Node.js 24"
-"$mise_bin" use --global node@24
-eval "$("$mise_bin" env --shell bash)"
+mise use --global node@24
+eval "$(mise env --shell bash)"
 
 package_manager="$(node -p "require('$repo_root/package.json').packageManager")"
 pnpm_version="${package_manager#pnpm@}"
@@ -35,7 +34,7 @@ fi
 echo "==> Activating pnpm $pnpm_version"
 corepack enable
 corepack prepare "pnpm@$pnpm_version" --activate
-"$mise_bin" reshim
+mise reshim
 
 # Amp commands inherit ~/.local/bin even when their shell does not load a profile.
 ln -sfn "$HOME/.local/share/mise/shims/node" "$HOME/.local/bin/node"
