@@ -21,8 +21,8 @@ fi
 EOF
 fi
 
-echo "==> Installing Node.js 22"
-"$mise_bin" use --global node@22
+echo "==> Installing Node.js 24"
+"$mise_bin" use --global node@24
 eval "$("$mise_bin" env --shell bash)"
 
 package_manager="$(node -p "require('$repo_root/package.json').packageManager")"

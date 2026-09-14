@@ -13,6 +13,8 @@ Svelte 5 bindings for the [Cloudflare Agents SDK](https://github.com/cloudflare/
 
 ## Installation
 
+Node.js 22.12 or newer is supported. Development and CI use Node.js 24.
+
 ```bash
 npm install agents-svelte
 ```
