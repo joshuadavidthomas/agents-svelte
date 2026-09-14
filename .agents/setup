@@ -3,26 +3,19 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "==> Ensuring mise is available"
-if ! command -v mise >/dev/null 2>&1; then
-  curl -fsSL https://mise.run | sh
+# Remove the Node override installed by earlier versions of this setup script.
+if [[ -f "$HOME/.bash_profile" ]]; then
+  sed -i '/^# agents-svelte mise activation$/,+3d' "$HOME/.bash_profile"
 fi
-
-profile_marker="# agents-svelte mise activation"
-touch "$HOME/.bash_profile"
-if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile"; then
-  cat >> "$HOME/.bash_profile" <<'EOF'
-
-# agents-svelte mise activation
-if [[ -x "$HOME/.local/bin/mise" ]]; then
-  eval "$("$HOME/.local/bin/mise" activate bash)"
+if [[ -f "$HOME/.env" ]]; then
+  sed -i '\|^PATH=.*\.local/share/mise/installs/node/2[24]/bin.*\.local/share/mise/shims|d' "$HOME/.env"
 fi
-EOF
-fi
-
-echo "==> Installing Node.js 24"
-mise use --global node@24
-eval "$(mise env --shell bash)"
+for tool in node pnpm; do
+  link="$HOME/.local/bin/$tool"
+  if [[ -L "$link" && "$(readlink "$link")" == "$HOME/.local/share/mise/shims/$tool" ]]; then
+    rm "$link"
+  fi
+done
 
 package_manager="$(node -p "require('$repo_root/package.json').packageManager")"
 pnpm_version="${package_manager#pnpm@}"
@@ -31,14 +24,10 @@ if [[ "$package_manager" == "$pnpm_version" ]]; then
   exit 1
 fi
 
-echo "==> Activating pnpm $pnpm_version"
-corepack enable
-corepack prepare "pnpm@$pnpm_version" --activate
-mise reshim
-
-# Amp commands inherit ~/.local/bin even when their shell does not load a profile.
-ln -sfn "$HOME/.local/share/mise/shims/node" "$HOME/.local/bin/node"
-ln -sfn "$HOME/.local/share/mise/shims/pnpm" "$HOME/.local/bin/pnpm"
+echo "==> Ensuring pnpm $pnpm_version is available"
+if [[ "$(pnpm --version)" != "$pnpm_version" ]]; then
+  npm install --global "pnpm@$pnpm_version"
+fi
 
 echo "==> Installing workspace dependencies"
 cd "$repo_root"
