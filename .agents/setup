@@ -1,36 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-# Remove the Node override installed by earlier versions of this setup script.
-if [[ -f "$HOME/.bash_profile" ]]; then
-  sed -i '/^# agents-svelte mise activation$/,+3d' "$HOME/.bash_profile"
-fi
-if [[ -f "$HOME/.env" ]]; then
-  sed -i '\|^PATH=.*\.local/share/mise/installs/node/2[24]/bin.*\.local/share/mise/shims|d' "$HOME/.env"
-fi
-for tool in node pnpm; do
-  link="$HOME/.local/bin/$tool"
-  if [[ -L "$link" && "$(readlink "$link")" == "$HOME/.local/share/mise/shims/$tool" ]]; then
-    rm "$link"
-  fi
-done
-
-package_manager="$(node -p "require('$repo_root/package.json').packageManager")"
-pnpm_version="${package_manager#pnpm@}"
-if [[ "$package_manager" == "$pnpm_version" ]]; then
-  echo "Expected packageManager to pin pnpm, found '$package_manager'" >&2
-  exit 1
-fi
-
-echo "==> Ensuring pnpm $pnpm_version is available"
-if [[ "$(pnpm --version)" != "$pnpm_version" ]]; then
-  npm install --global "pnpm@$pnpm_version"
-fi
-
 echo "==> Installing workspace dependencies"
-cd "$repo_root"
 pnpm install --frozen-lockfile
 
 echo "==> Installing Playwright Chromium"
