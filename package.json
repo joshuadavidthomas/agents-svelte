@@ -61,30 +61,30 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "agents": "^0.18.0",
-    "nanoid": "^5.1.9"
+    "agents": "^0.23.0",
+    "nanoid": "^6.0.1"
   },
   "devDependencies": {
-    "@ai-sdk/react": "3.0.215",
-    "@ai-sdk/svelte": "^4.0.213",
+    "@ai-sdk/react": "4.0.107",
+    "@ai-sdk/svelte": "^5.0.104",
     "@babel/core": "^8.0.1",
-    "@cloudflare/ai-chat": "^0.9.4",
-    "@cloudflare/voice": "^0.3.3",
-    "@cloudflare/workers-types": "^4.20260607.1",
+    "@cloudflare/ai-chat": "^0.12.0",
+    "@cloudflare/voice": "^0.5.0",
+    "@cloudflare/workers-types": "^5.20260916.1",
     "@playwright/test": "^1.60.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@types/node": "^26.0.1",
-    "@vitest/browser-playwright": "4.1.9",
-    "ai": "^6.0.213",
-    "oxfmt": "^0.56.0",
+    "@vitest/browser-playwright": "5.0.1",
+    "ai": "^7.0.104",
+    "oxfmt": "^0.68.0",
     "oxlint": "^1.68.0",
     "playwright": "^1.60.0",
     "react": "^19.2.7",
     "svelte": "^5.56.4",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.0.16",
-    "vitest": "4.1.9",
-    "vitest-browser-svelte": "^2.1.1",
+    "vitest": "5.0.1",
+    "vitest-browser-svelte": "^3.1.0",
     "wrangler": "^4.98.0"
   },
   "peerDependencies": {
